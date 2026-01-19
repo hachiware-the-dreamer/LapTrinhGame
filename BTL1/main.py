@@ -15,6 +15,10 @@ pygame.display.set_caption("Game")
 clock = pygame.time.Clock()
 font = pygame.font.Font("font/Pixeltype.ttf", 50)
 
+#Cursor
+pygame.mouse.set_visible(False)
+cursor_surf = pygame.image.load("assets/cursor.png").convert_alpha()
+cursor_surf = pygame.transform.smoothscale(cursor_surf, (48, 48))
 # Background
 background_surf = pygame.image.load("assets/background.png").convert()
 background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
