@@ -25,6 +25,16 @@ CURSOR_HOTSPOT = (6, 6)
 background_surf = pygame.image.load("assets/background.png").convert()
 background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
+
+#SFX
+#bonk sound
+bonk_sfx = pygame.mixer.Sound("assets/sound/bonk-sound-effect.mp3")
+bonk_sfx.set_volume(0.5)
+bonk_channel = pygame.mixer.Channel(1)
+#zombie idle 
+zombie_sfx = pygame.mixer.Sound("assets/sound/zombie-idle.ogg")   
+zombie_sfx.set_volume(0.5)
+zombie_channel = pygame.mixer.Channel(2)
 # Background music
 def background_music(state,asset=None,loops=-1,volume=0.3):
     if state == "play":
@@ -77,7 +87,7 @@ hits = 0
 misses = 0
 
 # Game timer
-GAME_DURATION = 180000 # 3 minutes
+GAME_DURATION = 120000 # 3 minutes
 game_start_time = 0
 game_active = False
 
@@ -130,6 +140,8 @@ while True:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and game_active:
                 for zombie in zombies:
                     if zombie.rect.collidepoint(mouse_pos) and not zombie.fading:
+                        bonk_channel.play(bonk_sfx)
+                        zombie_channel.play(zombie_sfx)
                         hits += 1
                         zombie.fading = True
                         zombie.fade_start = pygame.time.get_ticks()
@@ -146,7 +158,7 @@ while True:
             background_music("stop",None)
             background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
            
-    
+
     # Update zombies
     if game_active and game_state == GAME_STATE_PLAYING:
        
