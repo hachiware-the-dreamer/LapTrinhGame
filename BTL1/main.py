@@ -7,7 +7,7 @@ from end_screen import EndScreen
 from score_manager import ScoreManager
 
 pygame.init()
-
+pygame.mixer.init()
 # Screen setup
 SCREEN_WIDTH = 875
 SCREEN_HEIGHT = 490
@@ -19,6 +19,10 @@ font = pygame.font.Font("font/Pixeltype.ttf", 50)
 # Background
 background_surf = pygame.image.load("assets/background.png").convert()
 background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
+# Background music
+
+
 
 # Game state
 GAME_STATE_START = "start"
@@ -88,8 +92,7 @@ def reset_game():
     game_start_time = pygame.time.get_ticks()
     game_active = True
 
-
-while True:
+while True:  
     mouse_pos = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
@@ -103,9 +106,10 @@ while True:
             if action == "start":
                 reset_game()
                 game_state = GAME_STATE_PLAYING
-            elif action == "leaderboard":
-                pass
-            elif action == "quit":
+                pygame.mixer.music.load("assets\sound\game-background-music.mp3")
+                pygame.mixer.music.set_volume(0.3)   
+                pygame.mixer.music.play(-1)
+            elif action == 'quit':
                 pygame.quit()
                 sys.exit()
 
@@ -133,7 +137,7 @@ while True:
     # Check game timer
     if game_active and game_state == GAME_STATE_PLAYING:
         elapsed_game_time = pygame.time.get_ticks() - game_start_time
-        if elapsed_game_time >= GAME_DURATION:
+        if elapsed_game_time >= GAME_DURATION or misses > 5:
             game_active = False
             end_screen.set_stats(hits, misses)
             game_state = GAME_STATE_END
