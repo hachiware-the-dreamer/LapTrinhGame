@@ -29,6 +29,10 @@ class Button:
 
 class EndScreen:
     def __init__(self, screen_width, screen_height):
+        self.background_surf = pygame.image.load("assets/end_screen.png").convert()
+        self.background_surf = pygame.transform.scale(
+            self.background_surf, (screen_width, screen_height)
+        )
         self.screen_width = screen_width
         self.screen_height = screen_height
         
@@ -46,13 +50,13 @@ class EndScreen:
         button_x = screen_width // 2 - button_width // 2
         
         self.play_again_button = Button(
-            button_x, 350, button_width, button_height,
+            button_x, 320, button_width, button_height,
             "PLAY AGAIN", self.button_font, self.text_color,
             self.button_color, self.button_hover
         )
         
         self.quit_button = Button(
-            button_x, 430, button_width, button_height,
+            button_x, 400, button_width, button_height,
             "QUIT", self.button_font, self.text_color,
             self.button_color, self.button_hover
         )
@@ -69,9 +73,10 @@ class EndScreen:
         self.accuracy = (hits / total * 100) if total > 0 else 0
     
     def draw(self, screen):
-        screen.fill(self.bg_color)
+        screen.blit(self.background_surf, (0, 0))
+        # screen.fill(self.bg_color)
         
-        title_surf = self.title_font.render("GAME OVER!", True, (255, 0, 0))
+        title_surf = self.title_font.render("You Died!", True, (255, 255, 255))
         title_rect = title_surf.get_rect(center=(self.screen_width // 2, 80))
         screen.blit(title_surf, title_rect)
         

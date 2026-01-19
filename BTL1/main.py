@@ -87,7 +87,7 @@ hits = 0
 misses = 0
 
 # Game timer
-GAME_DURATION = 120000 # 3 minutes
+GAME_DURATION = 1000 # 3 minutes
 game_start_time = 0
 game_active = False
 
