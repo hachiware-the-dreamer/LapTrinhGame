@@ -20,7 +20,13 @@ background_surf = pygame.image.load("assets/background.png").convert()
 background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Background music
-
+def background_music(state,asset=None,loops=-1,volume=0.3):
+    if state == "play":
+        pygame.mixer.music.load(asset)
+        pygame.mixer.music.set_volume(volume)   
+        pygame.mixer.music.play(loops)
+    if state == "stop":
+        pygame.mixer.music.stop()
 
 
 # Game state
@@ -93,11 +99,10 @@ while True:
         if game_state == GAME_STATE_START:
             action = start_screen.handle_event(event, mouse_pos)
             if action == 'start':
+                background_music("play","assets/sound/game-background-music.mp3",-1,0.3)
                 reset_game()
                 game_state = GAME_STATE_PLAYING
-                pygame.mixer.music.load("assets\sound\game-background-music.mp3")
-                pygame.mixer.music.set_volume(0.3)   
-                pygame.mixer.music.play(-1)
+                
             elif action == 'quit':
                 pygame.quit()
                 sys.exit()
@@ -123,12 +128,17 @@ while True:
     if game_active and game_state == GAME_STATE_PLAYING:
         elapsed_game_time = pygame.time.get_ticks() - game_start_time
         if elapsed_game_time >= GAME_DURATION or misses > 5:
+            
             game_active = False
             end_screen.set_stats(hits, misses)
             game_state = GAME_STATE_END
+            background_music("stop",None)
+            background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
+           
     
     # Update zombies
     if game_active and game_state == GAME_STATE_PLAYING:
+       
         current_time = pygame.time.get_ticks()
         for zombie in zombies:
             if zombie.fading:
@@ -144,12 +154,14 @@ while True:
                     zombie.respawn()
     
     if game_state == GAME_STATE_START: # Start screen
+        
         start_screen.draw(screen)
     
     elif game_state == GAME_STATE_END: # End screen
         end_screen.draw(screen)
     
     elif game_state == GAME_STATE_PLAYING: # Main screen
+       
         screen.blit(background_surf, (0, 0))
         
         if game_active:
