@@ -1,0 +1,106 @@
+import pygame
+
+
+class Button:
+    def __init__(self, x, y, width, height, text, font, text_color, bg_color, hover_color):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.font = font
+        self.text_color = text_color
+        self.bg_color = bg_color
+        self.hover_color = hover_color
+        self.is_hovered = False
+    
+    def draw(self, screen):
+        color = self.hover_color if self.is_hovered else self.bg_color
+        pygame.draw.rect(screen, color, self.rect)
+        pygame.draw.rect(screen, (0, 0, 0), self.rect, 3)
+        
+        text_surf = self.font.render(self.text, True, self.text_color)
+        text_rect = text_surf.get_rect(center=self.rect.center)
+        screen.blit(text_surf, text_rect)
+    
+    def check_hover(self, mouse_pos):
+        self.is_hovered = self.rect.collidepoint(mouse_pos)
+    
+    def is_clicked(self, mouse_pos):
+        return self.rect.collidepoint(mouse_pos)
+
+
+class EndScreen:
+    def __init__(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        
+        self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
+        self.stats_font = pygame.font.Font("font/Pixeltype.ttf", 50)
+        self.button_font = pygame.font.Font("font/Pixeltype.ttf", 40)
+        
+        self.bg_color = (50, 50, 50)
+        self.button_color = (100, 100, 100)
+        self.button_hover = (150, 150, 150)
+        self.text_color = (255, 255, 255)
+        
+        button_width = 300
+        button_height = 60
+        button_x = screen_width // 2 - button_width // 2
+        
+        self.play_again_button = Button(
+            button_x, 350, button_width, button_height,
+            "PLAY AGAIN", self.button_font, self.text_color,
+            self.button_color, self.button_hover
+        )
+        
+        self.quit_button = Button(
+            button_x, 430, button_width, button_height,
+            "QUIT", self.button_font, self.text_color,
+            self.button_color, self.button_hover
+        )
+        
+        self.hits = 0
+        self.misses = 0
+        self.accuracy = 0
+    
+    def set_stats(self, hits, misses):
+        """Update the stats to display"""
+        self.hits = hits
+        self.misses = misses
+        total = hits + misses
+        self.accuracy = (hits / total * 100) if total > 0 else 0
+    
+    def draw(self, screen):
+        screen.fill(self.bg_color)
+        
+        title_surf = self.title_font.render("GAME OVER!", True, (255, 0, 0))
+        title_rect = title_surf.get_rect(center=(self.screen_width // 2, 80))
+        screen.blit(title_surf, title_rect)
+        
+        hits_surf = self.stats_font.render(f"Hits: {self.hits}", True, (0, 255, 0))
+        hits_rect = hits_surf.get_rect(center=(self.screen_width // 2, 180))
+        screen.blit(hits_surf, hits_rect)
+        
+        misses_surf = self.stats_font.render(f"Misses: {self.misses}", True, (255, 100, 100))
+        misses_rect = misses_surf.get_rect(center=(self.screen_width // 2, 230))
+        screen.blit(misses_surf, misses_rect)
+        
+        accuracy_surf = self.stats_font.render(f"Accuracy: {self.accuracy:.1f}%", True, self.text_color)
+        accuracy_rect = accuracy_surf.get_rect(center=(self.screen_width // 2, 280))
+        screen.blit(accuracy_surf, accuracy_rect)
+        
+        self.play_again_button.draw(screen)
+        self.quit_button.draw(screen)
+    
+    def handle_event(self, event, mouse_pos):
+        """
+        Returns: 'play_again', 'quit', or None
+        """
+        self.play_again_button.check_hover(mouse_pos)
+        self.quit_button.check_hover(mouse_pos)
+        
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.play_again_button.is_clicked(mouse_pos):
+                return 'play_again'
+            elif self.quit_button.is_clicked(mouse_pos):
+                return 'quit'
+        
+        return None
