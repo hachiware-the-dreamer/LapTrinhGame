@@ -41,6 +41,9 @@ GAME_STATE_PLAYING = 'playing'
 GAME_STATE_END = 'end'
 game_state = GAME_STATE_START
 
+# Start-screen music: play once when entering START state (not per event)
+background_music("play","assets/sound/start-screen-music.mp3",-1,0.7)
+
 # Screens
 start_screen = StartScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
 end_screen = EndScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -100,11 +103,12 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-        
         # Handle different game states
         if game_state == GAME_STATE_START:
+            
             action = start_screen.handle_event(event, mouse_pos)
             if action == 'start':
+                background_music("stop","assets/sound/start-screen-music.mp3")
                 background_music("play","assets/sound/game-background-music.mp3",-1,0.3)
                 reset_game()
                 game_state = GAME_STATE_PLAYING
@@ -117,6 +121,7 @@ while True:
             action = end_screen.handle_event(event, mouse_pos)
             if action == 'play_again':
                 game_state = GAME_STATE_START
+                background_music("play","assets/sound/start-screen-music.mp3",-1,0.7)
             elif action == 'quit':
                 pygame.quit()
                 sys.exit()
