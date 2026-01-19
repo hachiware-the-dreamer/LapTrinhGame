@@ -18,7 +18,9 @@ font = pygame.font.Font("font/Pixeltype.ttf", 50)
 #Cursor
 pygame.mouse.set_visible(False)
 cursor_surf = pygame.image.load("assets/cursor.png").convert_alpha()
-cursor_surf = pygame.transform.smoothscale(cursor_surf, (48, 48))
+cursor_surf = pygame.transform.smoothscale(cursor_surf, (20, 20))
+CURSOR_HOTSPOT = (6, 6)
+
 # Background
 background_surf = pygame.image.load("assets/background.png").convert()
 background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -193,5 +195,10 @@ while True:
         screen.blit(misses_text, (10, 40))
         screen.blit(accuracy_text, (10, 70))
     
+    screen.blit(
+        cursor_surf,
+        (mouse_pos[0] - CURSOR_HOTSPOT[0], mouse_pos[1] - CURSOR_HOTSPOT[1])
+    )
+
     pygame.display.update()
     clock.tick(60)
