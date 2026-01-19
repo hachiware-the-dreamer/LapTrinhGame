@@ -1,23 +1,58 @@
 import pygame
+from start_screen import Button
 
 
 class PauseScreen:
     def __init__(self, screen_width, screen_height):
         self.width = screen_width
         self.height = screen_height
-        self.font = pygame.font.Font("font/Pixeltype.ttf", 50)
+
         self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
+        self.button_font = pygame.font.Font("font/Pixeltype.ttf", 40)
 
-        center_x = screen_width // 2
+        self.button_color = (100, 100, 100)
+        self.button_hover = (150, 150, 150)
+        self.text_color = (255, 255, 255)
 
-        self.restart_rect = pygame.Rect(0, 0, 200, 50)
-        self.restart_rect.center = (center_x, screen_height // 2 - 60)
+        button_width = 300
+        button_height = 60
+        button_x = screen_width // 2 - button_width // 2
 
-        self.menu_rect = pygame.Rect(0, 0, 200, 50)
-        self.menu_rect.center = (center_x, screen_height // 2)
+        self.restart_button = Button(
+            button_x,
+            200,
+            button_width,
+            button_height,
+            "RESTART",
+            self.button_font,
+            self.text_color,
+            self.button_color,
+            self.button_hover,
+        )
 
-        self.quit_rect = pygame.Rect(0, 0, 200, 50)
-        self.quit_rect.center = (center_x, screen_height // 2 + 60)
+        self.menu_button = Button(
+            button_x,
+            280,
+            button_width,
+            button_height,
+            "MAIN MENU",
+            self.button_font,
+            self.text_color,
+            self.button_color,
+            self.button_hover,
+        )
+
+        self.quit_button = Button(
+            button_x,
+            360,
+            button_width,
+            button_height,
+            "QUIT",
+            self.button_font,
+            self.text_color,
+            self.button_color,
+            self.button_hover,
+        )
 
     def draw(self, surface):
 
@@ -30,30 +65,23 @@ class PauseScreen:
         title_rect = title.get_rect(center=(self.width // 2, 100))
         surface.blit(title, title_rect)
 
-        self._draw_button(surface, "Restart", self.restart_rect, (50, 200, 50))
-        self._draw_button(surface, "Main Menu", self.menu_rect, (50, 50, 200))
-        self._draw_button(surface, "Quit Game", self.quit_rect, (200, 50, 50))
-
-    def _draw_button(self, surface, text, rect, color):
-        mouse_pos = pygame.mouse.get_pos()
-        if rect.collidepoint(mouse_pos):
-            color = (
-                min(color[0] + 30, 255),
-                min(color[1] + 30, 255),
-                min(color[2] + 30, 255),
-            )
-
-        pygame.draw.rect(surface, color, rect, border_radius=10)
-        text_surf = self.font.render(text, True, (255, 255, 255))
-        text_rect = text_surf.get_rect(center=rect.center)
-        surface.blit(text_surf, text_rect)
+        self.restart_button.draw(surface)
+        self.menu_button.draw(surface)
+        self.quit_button.draw(surface)
 
     def handle_event(self, event):
+        mouse_pos = pygame.mouse.get_pos()
+
+        self.restart_button.check_hover(mouse_pos)
+        self.menu_button.check_hover(mouse_pos)
+        self.quit_button.check_hover(mouse_pos)
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.restart_rect.collidepoint(event.pos):
+            if self.restart_button.is_clicked(mouse_pos):
                 return "restart"
-            if self.menu_rect.collidepoint(event.pos):
+            if self.menu_button.is_clicked(mouse_pos):
                 return "menu"
-            if self.quit_rect.collidepoint(event.pos):
+            if self.quit_button.is_clicked(mouse_pos):
                 return "quit"
+
         return None
