@@ -93,31 +93,38 @@ class EndScreen:
         screen.blit(self.background_surf, (0, 0))
         # screen.fill(self.bg_color)
 
-        title_surf = self.title_font.render("You Died!", True, (255, 255, 255))
+        if self.misses >= 8:
+            title = "Game Over!"
+            color = (255, 50, 50)
+        else:
+            title = "You Win!"
+            color = (50, 255, 50)
+
+        title_surf = self.title_font.render(title, True, color)
         title_rect = title_surf.get_rect(center=(self.screen_width // 2, 80))
         screen.blit(title_surf, title_rect)
 
         hits_surf = self.stats_font.render(f"Hits: {self.hits}", True, (0, 255, 0))
-        hits_rect = hits_surf.get_rect(center=(self.screen_width // 2, 180))
+        hits_rect = hits_surf.get_rect(center=(self.screen_width // 2, 130))
         screen.blit(hits_surf, hits_rect)
 
         misses_surf = self.stats_font.render(
             f"Misses: {self.misses}", True, (255, 100, 100)
         )
-        misses_rect = misses_surf.get_rect(center=(self.screen_width // 2, 230))
+        misses_rect = misses_surf.get_rect(center=(self.screen_width // 2, 180))
         screen.blit(misses_surf, misses_rect)
 
         accuracy_surf = self.stats_font.render(
             f"Accuracy: {self.accuracy:.1f}%", True, self.text_color
         )
-        accuracy_rect = accuracy_surf.get_rect(center=(self.screen_width // 2, 280))
+        accuracy_rect = accuracy_surf.get_rect(center=(self.screen_width // 2, 230))
         screen.blit(accuracy_surf, accuracy_rect)
 
         best_accuracy_surf = self.stats_font.render(
             f"Best Accuracy: {self.best_accuracy:.1f}%", True, self.text_color
         )
         best_accuracy_rect = best_accuracy_surf.get_rect(
-            center=(self.screen_width // 2, 330)
+            center=(self.screen_width // 2, 280)
         )
         screen.blit(best_accuracy_surf, best_accuracy_rect)
 

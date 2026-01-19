@@ -142,8 +142,9 @@ def draw_miss_flash(target_surface):
     )
     target_surface.blit(_miss_flash_overlay, (0, 0))
 
+
 # Game timer
-GAME_DURATION = 120000  # 3 minutes
+GAME_DURATION = 5000  # 3 minutes
 game_start_time = 0
 game_active = False
 pause_start_time = 0
@@ -257,7 +258,7 @@ while True:
     # Check game timer
     if game_active and game_state == GAME_STATE_PLAYING:
         elapsed_game_time = pygame.time.get_ticks() - game_start_time
-        if elapsed_game_time >= GAME_DURATION or misses > 5:
+        if elapsed_game_time >= GAME_DURATION or misses > 8:
 
             game_active = False
             end_screen.set_stats(hits, misses)
@@ -286,7 +287,6 @@ while True:
                 time_alive = current_time - zombie.spawn_time
                 if time_alive >= TTL:
                     misses += 1
-                    trigger_miss_flash()
                     zombie.start_fading()
 
     if game_state == GAME_STATE_START:  # Start screen
