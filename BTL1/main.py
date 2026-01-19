@@ -4,6 +4,7 @@ import pygame.image
 import random
 from start_screen import StartScreen
 from end_screen import EndScreen
+from score_manager import ScoreManager
 
 pygame.init()
 
@@ -20,9 +21,9 @@ background_surf = pygame.image.load("assets/background.png").convert()
 background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Game state
-GAME_STATE_START = 'start'
-GAME_STATE_PLAYING = 'playing'
-GAME_STATE_END = 'end'
+GAME_STATE_START = "start"
+GAME_STATE_PLAYING = "playing"
+GAME_STATE_END = "end"
 game_state = GAME_STATE_START
 
 # Screens
@@ -33,23 +34,33 @@ end_screen = EndScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
 zombie_surf = pygame.image.load("assets/zombie.png").convert_alpha()
 zombie_surf = pygame.transform.scale(zombie_surf, (75, 75))
 
+
 # Zombie list
 class Zombie:
     def __init__(self):
-        self.rect = zombie_surf.get_rect(topleft=(random.randint(50, SCREEN_WIDTH - 125), random.randint(100, SCREEN_HEIGHT - 175)))
+        self.rect = zombie_surf.get_rect(
+            topleft=(
+                random.randint(50, SCREEN_WIDTH - 125),
+                random.randint(100, SCREEN_HEIGHT - 175),
+            )
+        )
         self.alpha = 255
         self.fading = False
         self.fade_start = 0
         self.spawn_time = pygame.time.get_ticks()
-        
+
     def respawn(self):
-        self.rect.topleft = (random.randint(50, SCREEN_WIDTH - 125), random.randint(100, SCREEN_HEIGHT - 175))
+        self.rect.topleft = (
+            random.randint(50, SCREEN_WIDTH - 125),
+            random.randint(100, SCREEN_HEIGHT - 175),
+        )
         self.alpha = 255
         self.fading = False
         self.spawn_time = pygame.time.get_ticks()
 
-FADE_DURATION = 500 # 500 milliseconds
-TTL = 1500 # Time to live
+
+FADE_DURATION = 500  # 500 milliseconds
+TTL = 1500  # Time to live
 
 zombies = []
 
@@ -58,7 +69,7 @@ hits = 0
 misses = 0
 
 # Game timer
-GAME_DURATION = 180000 # 3 minutes
+GAME_DURATION = 5000  # 3 minutes
 game_start_time = 0
 game_active = False
 
@@ -66,52 +77,59 @@ game_active = False
 def reset_game():
     """Reset game state for new game"""
     global zombies, hits, misses, game_start_time, game_active, TTL
-    
+
     TTL, zombie_count = start_screen.get_difficulty_settings()
-    
+
     zombies = [Zombie() for _ in range(zombie_count)]
-    
+
     hits = 0
     misses = 0
-    
+
     game_start_time = pygame.time.get_ticks()
     game_active = True
 
+
 while True:
     mouse_pos = pygame.mouse.get_pos()
-    
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-        
+
         # Handle different game states
         if game_state == GAME_STATE_START:
             action = start_screen.handle_event(event, mouse_pos)
-            if action == 'start':
+            if action == "start":
                 reset_game()
                 game_state = GAME_STATE_PLAYING
-            elif action == 'quit':
+            elif action == "leaderboard":
+                pass
+            elif action == "quit":
                 pygame.quit()
                 sys.exit()
-        
+
         elif game_state == GAME_STATE_END:
             action = end_screen.handle_event(event, mouse_pos)
-            if action == 'play_again':
+            if action == "play_again":
                 game_state = GAME_STATE_START
-            elif action == 'quit':
+            elif action == "quit":
                 pygame.quit()
                 sys.exit()
-        
+
         elif game_state == GAME_STATE_PLAYING:
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and game_active:
+            if (
+                event.type == pygame.MOUSEBUTTONDOWN
+                and event.button == 1
+                and game_active
+            ):
                 for zombie in zombies:
                     if zombie.rect.collidepoint(mouse_pos) and not zombie.fading:
                         hits += 1
                         zombie.fading = True
                         zombie.fade_start = pygame.time.get_ticks()
                         break
-    
+
     # Check game timer
     if game_active and game_state == GAME_STATE_PLAYING:
         elapsed_game_time = pygame.time.get_ticks() - game_start_time
@@ -119,7 +137,7 @@ while True:
             game_active = False
             end_screen.set_stats(hits, misses)
             game_state = GAME_STATE_END
-    
+
     # Update zombies
     if game_active and game_state == GAME_STATE_PLAYING:
         current_time = pygame.time.get_ticks()
@@ -135,40 +153,44 @@ while True:
                 if time_alive >= TTL:
                     misses += 1
                     zombie.respawn()
-    
-    if game_state == GAME_STATE_START: # Start screen
+
+    if game_state == GAME_STATE_START:  # Start screen
         start_screen.draw(screen)
-    
-    elif game_state == GAME_STATE_END: # End screen
+
+    elif game_state == GAME_STATE_END:  # End screen
         end_screen.draw(screen)
-    
-    elif game_state == GAME_STATE_PLAYING: # Main screen
+
+    elif game_state == GAME_STATE_PLAYING:  # Main screen
         screen.blit(background_surf, (0, 0))
-        
+
         if game_active:
             for zombie in zombies:
                 zombie_temp = zombie_surf.copy()
                 zombie_temp.set_alpha(zombie.alpha)
                 screen.blit(zombie_temp, zombie.rect)
-        
+
         total_clicks = hits + misses
         accuracy = (hits / total_clicks * 100) if total_clicks > 0 else 0
-        
+
         if game_active:
-            time_remaining = max(0, GAME_DURATION - (pygame.time.get_ticks() - game_start_time))
+            time_remaining = max(
+                0, GAME_DURATION - (pygame.time.get_ticks() - game_start_time)
+            )
             seconds_remaining = time_remaining // 1000
             minutes = seconds_remaining // 60
             seconds = seconds_remaining % 60
-            timer_text = font.render(f"Time: {minutes}:{seconds:02d}", False, (255, 0, 0))
+            timer_text = font.render(
+                f"Time: {minutes}:{seconds:02d}", False, (255, 0, 0)
+            )
             screen.blit(timer_text, (SCREEN_WIDTH - 250, 10))
-        
+
         hits_text = font.render(f"Hits: {hits}", False, (0, 0, 0))
         misses_text = font.render(f"Misses: {misses}", False, (0, 0, 0))
         accuracy_text = font.render(f"Accuracy: {accuracy:.1f}%", False, (0, 0, 0))
-        
+
         screen.blit(hits_text, (10, 10))
         screen.blit(misses_text, (10, 40))
         screen.blit(accuracy_text, (10, 70))
-    
+
     pygame.display.update()
     clock.tick(60)

@@ -87,6 +87,8 @@ class EndScreen:
         accuracy_rect = accuracy_surf.get_rect(center=(self.screen_width // 2, 280))
         screen.blit(accuracy_surf, accuracy_rect)
         
+        highest_score = max(self.hits, self.misses) 
+        
         self.play_again_button.draw(screen)
         self.quit_button.draw(screen)
     
