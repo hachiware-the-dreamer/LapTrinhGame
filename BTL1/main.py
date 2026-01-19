@@ -111,8 +111,39 @@ zombies = []
 hits = 0
 misses = 0
 
+# Miss flash (red border effect)
+RED_FLASH_DURATION_MS = 160
+RED_FLASH_MAX_ALPHA = 110
+RED_FLASH_BORDER_PX = 14
+_miss_flash_start_ms = -10_000
+_miss_flash_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+
+
+def trigger_miss_flash():
+    global _miss_flash_start_ms
+    _miss_flash_start_ms = pygame.time.get_ticks()
+
+
+def draw_miss_flash(target_surface):
+    elapsed = pygame.time.get_ticks() - _miss_flash_start_ms
+    if elapsed < 0 or elapsed > RED_FLASH_DURATION_MS:
+        return
+
+    t = elapsed / RED_FLASH_DURATION_MS
+    alpha = int(RED_FLASH_MAX_ALPHA * (1.0 - t))
+
+    # Clear overlay to fully transparent then draw a translucent border
+    _miss_flash_overlay.fill((0, 0, 0, 0))
+    pygame.draw.rect(
+        _miss_flash_overlay,
+        (255, 0, 0, alpha),
+        _miss_flash_overlay.get_rect(),
+        width=RED_FLASH_BORDER_PX,
+    )
+    target_surface.blit(_miss_flash_overlay, (0, 0))
+
 # Game timer
-GAME_DURATION = 5000  # 3 minutes
+GAME_DURATION = 120000  # 3 minutes
 game_start_time = 0
 game_active = False
 pause_start_time = 0
@@ -203,12 +234,14 @@ while True:
                 and event.button == 1
                 and game_active
             ):
+                hit_any = False
                 for zombie in zombies:
                     if (
                         zombie.rect.collidepoint(mouse_pos)
                         and not zombie.is_fading
                         and not zombie.is_hit
                     ):
+                        hit_any = True
                         bonk_channel.play(bonk_sfx)
                         zombie_channel.play(zombie_sfx)
                         hits += 1
@@ -216,6 +249,10 @@ while True:
                         # zombie.fading = True
                         # zombie.fade_start = pygame.time.get_ticks()
                         break
+
+                if not hit_any:
+                    misses += 1
+                    trigger_miss_flash()
 
     # Check game timer
     if game_active and game_state == GAME_STATE_PLAYING:
@@ -244,12 +281,12 @@ while True:
                     zombie.alpha = 255 - int((elapsed_fade / FADE_DURATION) * 255)
                     zombie.alpha = max(0, zombie.alpha)
                 else:
-                    misses += 1
                     zombie.respawn()
             else:
                 time_alive = current_time - zombie.spawn_time
                 if time_alive >= TTL:
                     misses += 1
+                    trigger_miss_flash()
                     zombie.start_fading()
 
     if game_state == GAME_STATE_START:  # Start screen
@@ -315,6 +352,9 @@ while True:
         screen.blit(hits_text, (10, 10))
         screen.blit(misses_text, (10, 40))
         screen.blit(accuracy_text, (10, 70))
+
+        # Red flash overlay on miss (draw late so it overlays gameplay)
+        draw_miss_flash(screen)
 
     screen.blit(
         cursor_surf,
