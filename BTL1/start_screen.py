@@ -81,17 +81,6 @@ class StartScreen:
             self.button_color,
             self.button_hover,
         )
-        self.leaderboard = Button(
-            button_x,
-            440,
-            button_width,
-            button_height,
-            "LEADERBOARD",
-            self.button_font,
-            self.text_color,
-            self.button_color,
-            self.button_hover,
-        )
 
         self.difficulty_levels = ["EASY", "NORMAL", "HARD"]
         self.current_difficulty = 1
@@ -106,7 +95,7 @@ class StartScreen:
         self.start_button.draw(screen)
         self.difficulty_button.draw(screen)
         self.quit_button.draw(screen)
-        self.leaderboard.draw(screen)
+
     def handle_event(self, event, mouse_pos):
         """
         Returns: 'start', 'quit', or None
