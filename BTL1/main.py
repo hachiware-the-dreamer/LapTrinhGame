@@ -2,15 +2,16 @@ import pygame
 import sys
 import pygame.image
 import random
-from start_screen import StartScreen
-from end_screen import EndScreen
-from pause_screen import PauseScreen
+from screens import ScreenStart, ScreenEnd, ScreenPause
+from mobs import MobManager
+from config import (
+    SCREEN_WIDTH, SCREEN_HEIGHT, GAME_DURATION, HEART_SIZE,
+    FADE_DURATION, HIT_DURATION, get_difficulty_config
+)
 
 pygame.init()
 pygame.mixer.init()
 # Screen setup
-SCREEN_WIDTH = 875
-SCREEN_HEIGHT = 490
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Game")
 clock = pygame.time.Clock()
@@ -22,39 +23,51 @@ cursor_surf = pygame.image.load("assets/cursor.png").convert_alpha()
 cursor_surf = pygame.transform.smoothscale(cursor_surf, (20, 20))
 CURSOR_HOTSPOT = (6, 6)
 
-# Background
- 
-background_surf = None
-zombie_surf = None
+# Heart images for lives display
+heart_surf = pygame.image.load("assets/heart.png").convert_alpha()
+heart_surf = pygame.transform.smoothscale(heart_surf, HEART_SIZE)
+broken_heart_surf = pygame.image.load("assets/dark-heart.png").convert_alpha()
+broken_heart_surf = pygame.transform.smoothscale(broken_heart_surf, HEART_SIZE)
 
-def set_random():
+# Background
+background_surf = None
+
+def set_random_background():
     global background_surf
     bg_num = random.randint(1, 3)
-    background_surf = pygame.image.load(f"assets/background{bg_num}.png").convert()
+    background_surf = pygame.image.load(f"assets/background/background{bg_num}.png").convert()
     background_surf = pygame.transform.scale(
         background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT)
     )
-    global zombie_surf
-    zb_num = random.randint(1, 3)
-    zombie_surf = pygame.image.load(f"assets/zombie{zb_num}.png").convert_alpha()
-    zombie_surf = pygame.transform.scale(zombie_surf, (75, 75))
 
+set_random_background()
 
- 
-
-
-set_random()
+# Mob manager
+mob_manager = MobManager(SCREEN_WIDTH, SCREEN_HEIGHT)
+mob_manager.load_assets()
 
 
 # SFX
 # bonk sound
 bonk_sfx = pygame.mixer.Sound("assets/sound/bonk-sound-effect.mp3")
-bonk_sfx.set_volume(0.5)
+bonk_sfx.set_volume(0.4)
 bonk_channel = pygame.mixer.Channel(1)
-# zombie idle
-zombie_sfx = pygame.mixer.Sound("assets/sound/zombie-idle.ogg")
-zombie_sfx.set_volume(0.5)
-zombie_channel = pygame.mixer.Channel(2)
+
+# Mob death sounds
+zombie_death_sfx = pygame.mixer.Sound("assets/sound/zombie.ogg")
+zombie_death_sfx.set_volume(0.4)
+
+spider_death_sfx = pygame.mixer.Sound("assets/sound/spider.ogg")
+spider_death_sfx.set_volume(0.5)
+
+creeper_death_sfx = pygame.mixer.Sound("assets/sound/creeper.ogg")
+creeper_death_sfx.set_volume(0.5)
+
+mob_sfx_channel = pygame.mixer.Channel(2)
+
+hurt_sfx = pygame.mixer.Sound("assets/sound/hurt.ogg")
+hurt_sfx.set_volume(0.5)
+hurt_channel = pygame.mixer.Channel(3)
 
 
 # Background music
@@ -78,51 +91,9 @@ game_state = GAME_STATE_START
 background_music("play", "assets/sound/start-screen-music.mp3", -1, 0.7)
 
 # Screens
-start_screen = StartScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
-end_screen = EndScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
-pause_screen = PauseScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
-
- 
-
-
-# Zombie list
-class Zombie:
-    def __init__(self):
-        self.reset_position()
-
-    def reset_position(self):
-        self.rect = zombie_surf.get_rect(
-            topleft=(
-                random.randint(50, SCREEN_WIDTH - 125),
-                random.randint(100, SCREEN_HEIGHT - 175),
-            )
-        )
-        self.alpha = 255
-        self.spawn_time = pygame.time.get_ticks()
-
-        self.is_hit = False
-        self.hit_time = 0
-
-        self.is_fading = False
-        self.fade_start = 0
-
-    def respawn(self):
-        self.reset_position()
-
-    def trigger_hit(self):
-        self.is_hit = True
-        self.hit_time = pygame.time.get_ticks()
-
-    def start_fading(self):
-        self.is_fading = True
-        self.fade_start = pygame.time.get_ticks()
-
-
-FADE_DURATION = 500  # 500 milliseconds
-HIT_DURATION = 150
-TTL = 1500  # Time to live
-
-zombies = []
+start_screen = ScreenStart(SCREEN_WIDTH, SCREEN_HEIGHT)
+end_screen = ScreenEnd(SCREEN_WIDTH, SCREEN_HEIGHT)
+pause_screen = ScreenPause(SCREEN_WIDTH, SCREEN_HEIGHT)
 
 # Scoring
 hits = 0
@@ -161,25 +132,31 @@ def draw_miss_flash(target_surface):
 
 
 # Game timer
-GAME_DURATION = 80000  # 3 minutes
 game_start_time = 0
 game_active = False
 pause_start_time = 0
+game_over_reason = ""  # "time", "misses", or "explode"
+max_misses = 5  # Will be set by difficulty
 
 
 def reset_game():
     """Reset game state for new game"""
-    global zombies, hits, misses, game_start_time, game_active, TTL
+    global hits, misses, game_start_time, game_active, game_over_reason, max_misses
 
     # Change background each time you press START / restart
-    set_random()
+    set_random_background()
 
-    TTL, zombie_count = start_screen.get_difficulty_settings()
-
-    zombies = [Zombie() for _ in range(zombie_count)]
+    # Get difficulty config
+    difficulty_name = start_screen.get_difficulty_name()
+    config = get_difficulty_config(difficulty_name)
+    mob_manager.set_difficulty(config)
+    mob_manager.reset()
+    
+    max_misses = config["max_misses"]  # Set lives based on difficulty
 
     hits = 0
     misses = 0
+    game_over_reason = ""
 
     game_start_time = pygame.time.get_ticks()
     game_active = True
@@ -206,12 +183,7 @@ while True:
 
                     pause_duration = pygame.time.get_ticks() - pause_start_time
                     game_start_time += pause_duration
-                    for zombie in zombies:
-                        zombie.spawn_time += pause_duration
-                        if zombie.is_hit:
-                            zombie.hit_time += pause_duration
-                        if zombie.is_fading:
-                            zombie.fade_start += pause_duration
+                    mob_manager.adjust_for_pause(pause_duration)
 
         # Handle different game states
         if game_state == GAME_STATE_START:
@@ -255,59 +227,58 @@ while True:
                 and event.button == 1
                 and game_active
             ):
-                hit_any = False
-                for zombie in zombies:
-                    if (
-                        zombie.rect.collidepoint(mouse_pos)
-                        and not zombie.is_fading
-                        and not zombie.is_hit
-                    ):
-                        hit_any = True
-                        bonk_channel.play(bonk_sfx)
-                        zombie_channel.play(zombie_sfx)
-                        hits += 1
-                        zombie.trigger_hit()
-                        # zombie.fading = True
-                        # zombie.fade_start = pygame.time.get_ticks()
-                        break
-
-                if not hit_any:
+                hit_mob_type = mob_manager.check_hit(mouse_pos)
+                
+                if hit_mob_type:
+                    bonk_channel.play(bonk_sfx)
+                    if hit_mob_type == "zombie":
+                        mob_sfx_channel.play(zombie_death_sfx)
+                    elif hit_mob_type == "spider":
+                        mob_sfx_channel.play(spider_death_sfx)
+                    elif hit_mob_type == "creeper":
+                        mob_sfx_channel.play(creeper_death_sfx)
+                    hits += 1
+                else:
                     misses += 1
                     trigger_miss_flash()
+                    hurt_channel.play(hurt_sfx)
 
-    # Check game timer
+    # Update mobs and check game over conditions
     if game_active and game_state == GAME_STATE_PLAYING:
-        elapsed_game_time = pygame.time.get_ticks() - game_start_time
-        if elapsed_game_time >= GAME_DURATION or misses > 8:
-
+        # Update mob manager
+        events = mob_manager.update()
+        if events["misses"] > 0:
+            misses += events["misses"]
+            hurt_channel.play(hurt_sfx)
+        
+        # Check for creeper explosion (instant game over)
+        if events["explode"]:
+            mob_sfx_channel.play(creeper_death_sfx)  # Play explosion sound
             game_active = False
-            end_screen.set_stats(hits, misses)
+            game_over_reason = "explode"
+            end_screen.set_stats(hits, misses, reason="explode")
             game_state = GAME_STATE_END
             background_music("stop", None)
             background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
-
-    # Update zombies
-    if game_active and game_state == GAME_STATE_PLAYING:
-
-        current_time = pygame.time.get_ticks()
-        for zombie in zombies:
-
-            if zombie.is_hit:
-                if current_time - zombie.hit_time >= HIT_DURATION:
-                    zombie.respawn()
-
-            elif zombie.is_fading:
-                elapsed_fade = current_time - zombie.fade_start
-                if elapsed_fade < FADE_DURATION:
-                    zombie.alpha = 255 - int((elapsed_fade / FADE_DURATION) * 255)
-                    zombie.alpha = max(0, zombie.alpha)
-                else:
-                    zombie.respawn()
-            else:
-                time_alive = current_time - zombie.spawn_time
-                if time_alive >= TTL:
-                    misses += 1
-                    zombie.start_fading()
+        
+        # Check game timer
+        elapsed_game_time = pygame.time.get_ticks() - game_start_time
+        if elapsed_game_time >= GAME_DURATION:
+            game_active = False
+            game_over_reason = "time"
+            end_screen.set_stats(hits, misses, reason="win")
+            game_state = GAME_STATE_END
+            background_music("stop", None)
+            background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
+        
+        # Check miss limit
+        elif misses >= max_misses:
+            game_active = False
+            game_over_reason = "misses"
+            end_screen.set_stats(hits, misses, reason="misses")
+            game_state = GAME_STATE_END
+            background_music("stop", None)
+            background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
 
     if game_state == GAME_STATE_START:  # Start screen
         start_screen.draw(screen)
@@ -317,41 +288,14 @@ while True:
 
     elif game_state == GAME_STATE_PAUSED:  # Pause screen
         screen.blit(background_surf, (0, 0))
-        for zombie in zombies:
-            zombie_temp = zombie_surf.copy()
-            zombie_temp.set_alpha(zombie.alpha)
-            screen.blit(zombie_temp, zombie.rect)
-
+        mob_manager.draw(screen)
         pause_screen.draw(screen)
 
     elif game_state == GAME_STATE_PLAYING:  # Main screen
         screen.blit(background_surf, (0, 0))
 
         if game_active:
-            for zombie in zombies:
-                if zombie.is_hit:
-                    shaking_zombie = zombie_surf.copy()
-
-                    shaking_zombie.fill((255, 50, 50), special_flags=pygame.BLEND_MULT)
-
-                    offset_x = random.randint(-5, 5)
-                    offset_y = random.randint(-5, 5)
-
-                    screen.blit(
-                        shaking_zombie,
-                        (zombie.rect.x + offset_x, zombie.rect.y + offset_y),
-                    )
-
-                elif zombie.is_fading:
-                    fading_zombie = zombie_surf.copy()
-                    fading_zombie.set_alpha(zombie.alpha)  # Use the calculated alpha
-                    screen.blit(fading_zombie, zombie.rect)
-
-                else:
-                    screen.blit(zombie_surf, zombie.rect)
-
-        total_clicks = hits + misses
-        accuracy = (hits / total_clicks * 100) if total_clicks > 0 else 0
+            mob_manager.draw(screen)
 
         if game_active:
             time_remaining = max(
@@ -365,13 +309,25 @@ while True:
             )
             screen.blit(timer_text, (SCREEN_WIDTH - 250, 10))
 
+        # Draw hits counter
         hits_text = font.render(f"Hits: {hits}", False, (255, 64, 0))
-        misses_text = font.render(f"Misses: {misses}", False, (255, 64, 0))
-        accuracy_text = font.render(f"Accuracy: {accuracy:.1f}%", False, (255, 64, 0))
-
         screen.blit(hits_text, (10, 10))
-        screen.blit(misses_text, (10, 40))
-        screen.blit(accuracy_text, (10, 70))
+        
+        # Draw hearts for lives (broken hearts appear from right -> left)
+        hearts_start_x = 10
+        hearts_y = 50
+        spacing = HEART_SIZE[0] + 5
+        for i in range(max_misses):
+            x = hearts_start_x + i * spacing
+            # Determine whether this slot is a remaining life or a lost life.
+            # We want rightmost hearts to become broken first, so compare
+            # against (max_misses - misses).
+            if i < (max_misses - misses):
+                # Remaining life - full heart
+                screen.blit(heart_surf, (x, hearts_y))
+            else:
+                # Lost life - broken heart
+                screen.blit(broken_heart_surf, (x, hearts_y))
 
         # Red flash overlay on miss (draw late so it overlays gameplay)
         draw_miss_flash(screen)
