@@ -16,11 +16,36 @@ pygame.display.set_caption("Game")
 clock = pygame.time.Clock()
 font = pygame.font.Font("font/Pixeltype.ttf", 50)
 
+# Cursor
+pygame.mouse.set_visible(False)
+cursor_surf = pygame.image.load("assets/cursor.png").convert_alpha()
+cursor_surf = pygame.transform.smoothscale(cursor_surf, (20, 20))
+CURSOR_HOTSPOT = (6, 6)
+
 # Background
 background_surf = pygame.image.load("assets/background.png").convert()
 background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
+
+# SFX
+# bonk sound
+bonk_sfx = pygame.mixer.Sound("assets/sound/bonk-sound-effect.mp3")
+bonk_sfx.set_volume(0.5)
+bonk_channel = pygame.mixer.Channel(1)
+# zombie idle
+zombie_sfx = pygame.mixer.Sound("assets/sound/zombie-idle.ogg")
+zombie_sfx.set_volume(0.5)
+zombie_channel = pygame.mixer.Channel(2)
+
+
 # Background music
+def background_music(state, asset=None, loops=-1, volume=0.3):
+    if state == "play":
+        pygame.mixer.music.load(asset)
+        pygame.mixer.music.set_volume(volume)
+        pygame.mixer.music.play(loops)
+    if state == "stop":
+        pygame.mixer.music.stop()
 
 
 # Game state
@@ -29,6 +54,9 @@ GAME_STATE_PLAYING = "playing"
 GAME_STATE_END = "end"
 GAME_STATE_PAUSED = "paused"
 game_state = GAME_STATE_START
+
+# Start-screen music: play once when entering START state (not per event)
+background_music("play", "assets/sound/start-screen-music.mp3", -1, 0.7)
 
 # Screens
 start_screen = StartScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -84,7 +112,7 @@ hits = 0
 misses = 0
 
 # Game timer
-GAME_DURATION = 10000  # 3 minutes
+GAME_DURATION = 5000  # 3 minutes
 game_start_time = 0
 game_active = False
 pause_start_time = 0
@@ -135,13 +163,16 @@ while True:
 
         # Handle different game states
         if game_state == GAME_STATE_START:
+
             action = start_screen.handle_event(event, mouse_pos)
             if action == "start":
+                background_music("stop", "assets/sound/start-screen-music.mp3")
+                background_music(
+                    "play", "assets/sound/game-background-music.mp3", -1, 0.3
+                )
                 reset_game()
                 game_state = GAME_STATE_PLAYING
-                pygame.mixer.music.load("assets\sound\game-background-music.mp3")
-                pygame.mixer.music.set_volume(0.3)
-                pygame.mixer.music.play(-1)
+
             elif action == "quit":
                 pygame.quit()
                 sys.exit()
@@ -161,6 +192,7 @@ while True:
             action = end_screen.handle_event(event, mouse_pos)
             if action == "play_again":
                 game_state = GAME_STATE_START
+                background_music("play", "assets/sound/start-screen-music.mp3", -1, 0.7)
             elif action == "quit":
                 pygame.quit()
                 sys.exit()
@@ -174,9 +206,11 @@ while True:
                 for zombie in zombies:
                     if (
                         zombie.rect.collidepoint(mouse_pos)
-                        and not zombie.is_hit
                         and not zombie.is_fading
+                        and not zombie.is_hit
                     ):
+                        bonk_channel.play(bonk_sfx)
+                        zombie_channel.play(zombie_sfx)
                         hits += 1
                         zombie.trigger_hit()
                         # zombie.fading = True
@@ -187,12 +221,16 @@ while True:
     if game_active and game_state == GAME_STATE_PLAYING:
         elapsed_game_time = pygame.time.get_ticks() - game_start_time
         if elapsed_game_time >= GAME_DURATION or misses > 5:
+
             game_active = False
             end_screen.set_stats(hits, misses)
             game_state = GAME_STATE_END
+            background_music("stop", None)
+            background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
 
     # Update zombies
     if game_active and game_state == GAME_STATE_PLAYING:
+
         current_time = pygame.time.get_ticks()
         for zombie in zombies:
 
@@ -277,6 +315,11 @@ while True:
         screen.blit(hits_text, (10, 10))
         screen.blit(misses_text, (10, 40))
         screen.blit(accuracy_text, (10, 70))
+
+    screen.blit(
+        cursor_surf,
+        (mouse_pos[0] - CURSOR_HOTSPOT[0], mouse_pos[1] - CURSOR_HOTSPOT[1]),
+    )
 
     pygame.display.update()
     clock.tick(60)

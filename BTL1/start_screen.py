@@ -31,13 +31,28 @@ class Button:
 
 class StartScreen:
     def __init__(self, screen_width, screen_height):
+        # Background
+        self.background_surf = pygame.image.load("assets/start_screen.jpg").convert()
+        self.background_surf = pygame.transform.scale(
+            self.background_surf, (screen_width, screen_height)
+        )
+
+        # Logo
+        self.logo_surf = pygame.image.load("assets/logo.png").convert_alpha()
+        logo_w = int(screen_width * 0.6)
+        logo_h = int(self.logo_surf.get_height() * (logo_w / self.logo_surf.get_width()))
+        self.logo_surf = pygame.transform.smoothscale(self.logo_surf, (logo_w, logo_h))
+        self.logo_rect = self.logo_surf.get_rect(center=(screen_width // 2, 100))
+
+        self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
+        self.button_font = pygame.font.Font("font/Pixeltype.ttf", 40)
+
         self.screen_width = screen_width
         self.screen_height = screen_height
 
         self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
         self.button_font = pygame.font.Font("font/Pixeltype.ttf", 40)
-
-        self.bg_color = (34, 139, 34)  # Forest green
+        
         self.button_color = (100, 100, 100)
         self.button_hover = (150, 150, 150)
         self.text_color = (255, 255, 255)
@@ -86,12 +101,13 @@ class StartScreen:
         self.current_difficulty = 1
 
     def draw(self, screen):
-        screen.fill(self.bg_color)
-
-        title_surf = self.title_font.render("WHACK-A-ZOMBIE", True, (255, 0, 0))
-        title_rect = title_surf.get_rect(center=(self.screen_width // 2, 100))
-        screen.blit(title_surf, title_rect)
-
+        screen.blit(self.background_surf, (0, 0))
+        # screen.fill(self.bg_color)
+        screen.blit(self.logo_surf, self.logo_rect)
+        # title_surf = self.title_font.render("WHACK-A-ZOMBIE", True, (255, 0, 0))
+        # title_rect = title_surf.get_rect(center=(self.screen_width // 2, 100))
+        # screen.blit(title_surf, title_rect)
+        
         self.start_button.draw(screen)
         self.difficulty_button.draw(screen)
         self.quit_button.draw(screen)

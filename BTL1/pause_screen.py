@@ -8,17 +8,13 @@ class PauseScreen:
         self.font = pygame.font.Font("font/Pixeltype.ttf", 50)
         self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
 
-
         center_x = screen_width // 2
 
- 
         self.restart_rect = pygame.Rect(0, 0, 200, 50)
         self.restart_rect.center = (center_x, screen_height // 2 - 60)
 
-
         self.menu_rect = pygame.Rect(0, 0, 200, 50)
         self.menu_rect.center = (center_x, screen_height // 2)
-
 
         self.quit_rect = pygame.Rect(0, 0, 200, 50)
         self.quit_rect.center = (center_x, screen_height // 2 + 60)
@@ -26,15 +22,13 @@ class PauseScreen:
     def draw(self, surface):
 
         overlay = pygame.Surface((self.width, self.height))
-        overlay.set_alpha(128)  
-        overlay.fill((0, 0, 0))  
+        overlay.set_alpha(128)
+        overlay.fill((0, 0, 0))
         surface.blit(overlay, (0, 0))
-
 
         title = self.title_font.render("PAUSED", True, (255, 255, 255))
         title_rect = title.get_rect(center=(self.width // 2, 100))
         surface.blit(title, title_rect)
-
 
         self._draw_button(surface, "Restart", self.restart_rect, (50, 200, 50))
         self._draw_button(surface, "Main Menu", self.menu_rect, (50, 50, 200))
