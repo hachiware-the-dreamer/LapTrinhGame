@@ -23,8 +23,27 @@ cursor_surf = pygame.transform.smoothscale(cursor_surf, (20, 20))
 CURSOR_HOTSPOT = (6, 6)
 
 # Background
-background_surf = pygame.image.load("assets/background.png").convert()
-background_surf = pygame.transform.scale(background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
+ 
+background_surf = None
+zombie_surf = None
+
+def set_random():
+    global background_surf
+    bg_num = random.randint(1, 3)
+    background_surf = pygame.image.load(f"assets/background{bg_num}.png").convert()
+    background_surf = pygame.transform.scale(
+        background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT)
+    )
+    global zombie_surf
+    zb_num = random.randint(1, 3)
+    zombie_surf = pygame.image.load(f"assets/zombie{zb_num}.png").convert_alpha()
+    zombie_surf = pygame.transform.scale(zombie_surf, (75, 75))
+
+
+ 
+
+
+set_random()
 
 
 # SFX
@@ -63,9 +82,7 @@ start_screen = StartScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
 end_screen = EndScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
 pause_screen = PauseScreen(SCREEN_WIDTH, SCREEN_HEIGHT)
 
-# Zombie
-zombie_surf = pygame.image.load("assets/zombie.png").convert_alpha()
-zombie_surf = pygame.transform.scale(zombie_surf, (75, 75))
+ 
 
 
 # Zombie list
@@ -144,7 +161,7 @@ def draw_miss_flash(target_surface):
 
 
 # Game timer
-GAME_DURATION = 5000  # 3 minutes
+GAME_DURATION = 80000  # 3 minutes
 game_start_time = 0
 game_active = False
 pause_start_time = 0
@@ -153,6 +170,9 @@ pause_start_time = 0
 def reset_game():
     """Reset game state for new game"""
     global zombies, hits, misses, game_start_time, game_active, TTL
+
+    # Change background each time you press START / restart
+    set_random()
 
     TTL, zombie_count = start_screen.get_difficulty_settings()
 
@@ -200,7 +220,7 @@ while True:
             if action == "start":
                 background_music("stop", "assets/sound/start-screen-music.mp3")
                 background_music(
-                    "play", "assets/sound/game-background-music.mp3", -1, 0.3
+                    "play", "assets/sound/game-background-music.mp3", -1, 0.7
                 )
                 reset_game()
                 game_state = GAME_STATE_PLAYING
@@ -345,9 +365,9 @@ while True:
             )
             screen.blit(timer_text, (SCREEN_WIDTH - 250, 10))
 
-        hits_text = font.render(f"Hits: {hits}", False, (0, 0, 0))
-        misses_text = font.render(f"Misses: {misses}", False, (0, 0, 0))
-        accuracy_text = font.render(f"Accuracy: {accuracy:.1f}%", False, (0, 0, 0))
+        hits_text = font.render(f"Hits: {hits}", False, (255, 64, 0))
+        misses_text = font.render(f"Misses: {misses}", False, (255, 64, 0))
+        accuracy_text = font.render(f"Accuracy: {accuracy:.1f}%", False, (255, 64, 0))
 
         screen.blit(hits_text, (10, 10))
         screen.blit(misses_text, (10, 40))
