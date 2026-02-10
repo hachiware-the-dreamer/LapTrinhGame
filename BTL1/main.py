@@ -1,337 +1,434 @@
 import pygame
 import sys
-import pygame.image
-import random
-from screens import ScreenStart, ScreenEnd, ScreenPause
-from mobs import MobManager
+from screens import ScreenStart, ScreenResults, ScreenPause, ScreenInstructions, ScreenSettings
+from target import Target
 from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, GAME_DURATION, HEART_SIZE,
-    FADE_DURATION, HIT_DURATION, get_difficulty_config
+    SCREEN_WIDTH, SCREEN_HEIGHT, GAME_DURATION,
+    INITIAL_TARGET_RADIUS, MIN_TARGET_RADIUS,
+    INITIAL_TTL, MIN_TTL,
+    DIFFICULTY_RAMP_INTERVAL, TTL_DECREASE_AMOUNT, RADIUS_DECREASE_AMOUNT,
+    BASE_POINTS, REFLEX_BONUS_CAP,
+    HIT_FLASH_DURATION, MISS_FLASH_DURATION,
+    CURSOR_SIZE, COLOR_BACKGROUND, COLOR_HUD_TEXT,
+    COLOR_HIT_FLASH, COLOR_MISS_FLASH, HUD_HEIGHT
 )
 
 pygame.init()
 pygame.mixer.init()
+
 # Screen setup
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Game")
+pygame.display.set_caption("Aim Trainer")
 clock = pygame.time.Clock()
-font = pygame.font.Font("font/Pixeltype.ttf", 50)
+font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 50)
+large_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 70)
 
 # Cursor
 pygame.mouse.set_visible(False)
-cursor_surf = pygame.image.load("assets/cursor.png").convert_alpha()
-cursor_surf = pygame.transform.smoothscale(cursor_surf, (20, 20))
-CURSOR_HOTSPOT = (6, 6)
+cursor_surf = pygame.image.load("assets/crosshair.png").convert_alpha()
+cursor_surf = pygame.transform.smoothscale(cursor_surf, CURSOR_SIZE)
+CURSOR_HOTSPOT = (CURSOR_SIZE[0] // 2, CURSOR_SIZE[1] // 2)
 
-# Heart images for lives display
-heart_surf = pygame.image.load("assets/heart.png").convert_alpha()
-heart_surf = pygame.transform.smoothscale(heart_surf, HEART_SIZE)
-broken_heart_surf = pygame.image.load("assets/dark-heart.png").convert_alpha()
-broken_heart_surf = pygame.transform.smoothscale(broken_heart_surf, HEART_SIZE)
+# Sound effects
+try:
+    hit_sfx = pygame.mixer.Sound("assets/sound/bonk-sound-effect.mp3")
+    hit_sfx.set_volume(0.3)
+    hit_channel = pygame.mixer.Channel(1)
+except:
+    hit_sfx = None
+    hit_channel = None
 
-# Background
-background_surf = None
+try:
+    miss_sfx = pygame.mixer.Sound("assets/sound/hurt.ogg")
+    miss_sfx.set_volume(0.2)
+    miss_channel = pygame.mixer.Channel(2)
+except:
+    miss_sfx = None
+    miss_channel = None
 
-def set_random_background():
-    global background_surf
-    bg_num = random.randint(1, 3)
-    background_surf = pygame.image.load(f"assets/background/background{bg_num}.png").convert()
-    background_surf = pygame.transform.scale(
-        background_surf, (SCREEN_WIDTH, SCREEN_HEIGHT)
-    )
-
-set_random_background()
-
-# Mob manager
-mob_manager = MobManager(SCREEN_WIDTH, SCREEN_HEIGHT)
-mob_manager.load_assets()
-
-
-# SFX
-# bonk sound
-bonk_sfx = pygame.mixer.Sound("assets/sound/bonk-sound-effect.mp3")
-bonk_sfx.set_volume(0.4)
-bonk_channel = pygame.mixer.Channel(1)
-
-# Mob death sounds
-zombie_death_sfx = pygame.mixer.Sound("assets/sound/zombie.ogg")
-zombie_death_sfx.set_volume(0.4)
-
-spider_death_sfx = pygame.mixer.Sound("assets/sound/spider.ogg")
-spider_death_sfx.set_volume(0.5)
-
-creeper_death_sfx = pygame.mixer.Sound("assets/sound/creeper.ogg")
-creeper_death_sfx.set_volume(0.5)
-
-mob_sfx_channel = pygame.mixer.Channel(2)
-
-hurt_sfx = pygame.mixer.Sound("assets/sound/hurt.ogg")
-hurt_sfx.set_volume(0.5)
-hurt_channel = pygame.mixer.Channel(3)
-
-
-# Background music
-def background_music(state, asset=None, loops=-1, volume=0.3):
-    if state == "play":
-        pygame.mixer.music.load(asset)
-        pygame.mixer.music.set_volume(volume)
-        pygame.mixer.music.play(loops)
-    if state == "stop":
-        pygame.mixer.music.stop()
-
-
-# Game state
+# Game states
 GAME_STATE_START = "start"
+GAME_STATE_INSTRUCTIONS = "instructions"
+GAME_STATE_SETTINGS = "settings"
 GAME_STATE_PLAYING = "playing"
-GAME_STATE_END = "end"
 GAME_STATE_PAUSED = "paused"
+GAME_STATE_COUNTDOWN = "countdown"
+GAME_STATE_RESULTS = "results"
 game_state = GAME_STATE_START
 
-# Start-screen music: play once when entering START state (not per event)
-background_music("play", "assets/sound/start-screen-music.mp3", -1, 0.7)
-
-# Screens
+# Initialize screens
 start_screen = ScreenStart(SCREEN_WIDTH, SCREEN_HEIGHT)
-end_screen = ScreenEnd(SCREEN_WIDTH, SCREEN_HEIGHT)
+results_screen = ScreenResults(SCREEN_WIDTH, SCREEN_HEIGHT)
 pause_screen = ScreenPause(SCREEN_WIDTH, SCREEN_HEIGHT)
+instructions_screen = ScreenInstructions(SCREEN_WIDTH, SCREEN_HEIGHT)
+settings_screen = ScreenSettings(SCREEN_WIDTH, SCREEN_HEIGHT)
 
-# Scoring
+# Game variables
+current_target = None
+score = 0
 hits = 0
 misses = 0
+reaction_times = [] # For results
+game_start_time = 0
+pause_start_time = 0
+pause_accumulated = 0  # Total time spent paused
+countdown_start_time = 0
+countdown_duration = 3000  # 3 second countdown
+current_ttl = INITIAL_TTL
+current_radius = INITIAL_TARGET_RADIUS
+last_difficulty_increase = 0
 
-# Miss flash (red border effect)
-RED_FLASH_DURATION_MS = 160
-RED_FLASH_MAX_ALPHA = 110
-RED_FLASH_BORDER_PX = 14
-_miss_flash_start_ms = -10_000
-_miss_flash_overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+# Visual feedback
+hit_flash_start = -10000
+miss_flash_start = -10000
+floating_text = []  # (text, x, y, start_time, color)
+
+
+def trigger_hit_flash():
+    """Trigger green flash on hit"""
+    global hit_flash_start
+    hit_flash_start = pygame.time.get_ticks()
 
 
 def trigger_miss_flash():
-    global _miss_flash_start_ms
-    _miss_flash_start_ms = pygame.time.get_ticks()
+    """Trigger red flash on miss"""
+    global miss_flash_start
+    miss_flash_start = pygame.time.get_ticks()
 
 
-def draw_miss_flash(target_surface):
-    elapsed = pygame.time.get_ticks() - _miss_flash_start_ms
-    if elapsed < 0 or elapsed > RED_FLASH_DURATION_MS:
-        return
+def draw_feedback_flash(surface):
+    """Draw hit/miss feedback flashes"""
+    current_time = pygame.time.get_ticks()
+    
+    # Hit flash
+    hit_elapsed = current_time - hit_flash_start
+    if 0 <= hit_elapsed < HIT_FLASH_DURATION:
+        alpha = int(100 * (1.0 - hit_elapsed / HIT_FLASH_DURATION))
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.rect(overlay, (*COLOR_HIT_FLASH, alpha), overlay.get_rect(), width=15)
+        surface.blit(overlay, (0, 0))
+    
+    # Miss flash
+    miss_elapsed = current_time - miss_flash_start
+    if 0 <= miss_elapsed < MISS_FLASH_DURATION:
+        alpha = int(120 * (1.0 - miss_elapsed / MISS_FLASH_DURATION))
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.rect(overlay, (*COLOR_MISS_FLASH, alpha), overlay.get_rect(), width=15)
+        surface.blit(overlay, (0, 0))
 
-    t = elapsed / RED_FLASH_DURATION_MS
-    alpha = int(RED_FLASH_MAX_ALPHA * (1.0 - t))
 
-    # Clear overlay to fully transparent then draw a translucent border
-    _miss_flash_overlay.fill((0, 0, 0, 0))
-    pygame.draw.rect(
-        _miss_flash_overlay,
-        (255, 0, 0, alpha),
-        _miss_flash_overlay.get_rect(),
-        width=RED_FLASH_BORDER_PX,
-    )
-    target_surface.blit(_miss_flash_overlay, (0, 0))
+def add_floating_text(text, x, y, color):
+    """Add floating text feedback"""
+    floating_text.append((text, x, y, pygame.time.get_ticks(), color))
 
 
-# Game timer
-game_start_time = 0
-game_active = False
-pause_start_time = 0
-game_over_reason = ""  # "time", "misses", or "explode"
-max_misses = 5  # Will be set by difficulty
+def draw_floating_text(surface):
+    """Draw and update floating text"""
+    current_time = pygame.time.get_ticks()
+    to_remove = []
+    
+    for i, (text, x, y, start_time, color) in enumerate(floating_text):
+        elapsed = current_time - start_time
+        duration = 800  # ms
+        
+        if elapsed > duration:
+            to_remove.append(i)
+            continue
+        
+        # Float upward and fade out
+        progress = elapsed / duration
+        current_y = y - (progress * 50)
+        alpha = int(255 * (1.0 - progress))
+        
+        text_surf = font.render(text, True, color)
+        text_surf.set_alpha(alpha)
+        text_rect = text_surf.get_rect(center=(x, current_y))
+        surface.blit(text_surf, text_rect)
+    
+    for i in reversed(to_remove):
+        floating_text.pop(i)
+
+
+def spawn_target():
+    """Spawn a new target with current difficulty settings"""
+    global current_target
+    current_target = Target(SCREEN_WIDTH, SCREEN_HEIGHT, current_radius, current_ttl)
+
+
+def calculate_score(reaction_time, ttl):
+    """Calculate score based on reaction time and TTL"""
+    reflex_bonus = max(0, ttl - reaction_time) / ttl * REFLEX_BONUS_CAP
+    return BASE_POINTS + int(reflex_bonus)
+
+
+def update_difficulty():
+    """Gradually increase difficulty over time"""
+    global current_ttl, current_radius, last_difficulty_increase
+    
+    elapsed = pygame.time.get_ticks() - game_start_time
+    intervals_passed = elapsed // DIFFICULTY_RAMP_INTERVAL
+    
+    if intervals_passed > last_difficulty_increase:
+        # Decrease TTL
+        current_ttl = max(MIN_TTL, current_ttl - TTL_DECREASE_AMOUNT)
+        # Decrease radius
+        current_radius = max(MIN_TARGET_RADIUS, current_radius - RADIUS_DECREASE_AMOUNT)
+        last_difficulty_increase = intervals_passed
 
 
 def reset_game():
-    """Reset game state for new game"""
-    global hits, misses, game_start_time, game_active, game_over_reason, max_misses
-
-    # Change background each time you press START / restart
-    set_random_background()
-
-    # Get difficulty config
-    difficulty_name = start_screen.get_difficulty_name()
-    config = get_difficulty_config(difficulty_name)
-    mob_manager.set_difficulty(config)
-    mob_manager.reset()
+    """Reset game state for new session"""
+    global score, hits, misses, reaction_times, game_start_time
+    global current_target, current_ttl, current_radius, last_difficulty_increase
+    global floating_text, pause_accumulated
     
-    max_misses = config["max_misses"]  # Set lives based on difficulty
-
+    score = 0
     hits = 0
     misses = 0
-    game_over_reason = ""
-
+    reaction_times = []
+    floating_text = []
+    pause_accumulated = 0
+    
+    current_ttl = INITIAL_TTL
+    current_radius = INITIAL_TARGET_RADIUS
+    last_difficulty_increase = 0
+    
     game_start_time = pygame.time.get_ticks()
-    game_active = True
+    spawn_target()
 
 
-while True:
+def draw_hud(surface, frozen_time_ms=None):
+    """Draw the HUD during gameplay
+    
+    Args:
+        surface: Surface to draw on
+        frozen_time_ms: If provided, display this time instead of calculating (for pause)
+    """
+    # Time remaining (center top)
+    if frozen_time_ms is not None:
+        time_remaining = frozen_time_ms
+    else:
+        time_remaining = max(0, GAME_DURATION - (pygame.time.get_ticks() - game_start_time - pause_accumulated))
+    
+    seconds = time_remaining // 1000
+    time_text = large_font.render(f"{seconds}s", True, COLOR_HUD_TEXT)
+    surface.blit(time_text, (SCREEN_WIDTH // 2 - time_text.get_width() // 2, 30))
+    
+    # Score (top left)
+    score_text = font.render(f"Score: {score}", True, (200, 140, 0))
+    surface.blit(score_text, (30, 30))
+    
+    # Hits (left side, evenly spaced)
+    hits_text = font.render(f"Hits: {hits}", True, (0, 150, 0))
+    surface.blit(hits_text, (30, 95))
+    
+    # Misses (left side, evenly spaced)
+    misses_text = font.render(f"Misses: {misses}", True, (200, 0, 0))
+    surface.blit(misses_text, (30, 160))
+    
+    # Current difficulty info (top right)
+    small_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 30)
+    ttl_text = small_font.render(f"TTL: {current_ttl}ms", True, (80, 80, 80))
+    radius_text = small_font.render(f"Size: {current_radius}px", True, (80, 80, 80))
+    surface.blit(ttl_text, (SCREEN_WIDTH - 200, 30))
+    surface.blit(radius_text, (SCREEN_WIDTH - 200, 70))
+
+
+# Main game loop
+running = True
+while running:
     mouse_pos = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+            running = False
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 if game_state == GAME_STATE_PLAYING:
-
                     game_state = GAME_STATE_PAUSED
                     pause_start_time = pygame.time.get_ticks()
-
                 elif game_state == GAME_STATE_PAUSED:
+                    # Start countdown to resume
+                    game_state = GAME_STATE_COUNTDOWN
+                    countdown_start_time = pygame.time.get_ticks()
 
-                    game_state = GAME_STATE_PLAYING
-
-                    pause_duration = pygame.time.get_ticks() - pause_start_time
-                    game_start_time += pause_duration
-                    mob_manager.adjust_for_pause(pause_duration)
-
-        # Handle different game states
+        # Handle events based on game state
         if game_state == GAME_STATE_START:
-
             action = start_screen.handle_event(event, mouse_pos)
             if action == "start":
-                background_music("stop", "assets/sound/start-screen-music.mp3")
-                background_music(
-                    "play", "assets/sound/game-background-music.mp3", -1, 0.7
-                )
                 reset_game()
                 game_state = GAME_STATE_PLAYING
-
+            elif action == "instructions":
+                game_state = GAME_STATE_INSTRUCTIONS
+            elif action == "settings":
+                game_state = GAME_STATE_SETTINGS
             elif action == "quit":
-                pygame.quit()
-                sys.exit()
+                running = False
+
+        elif game_state == GAME_STATE_INSTRUCTIONS:
+            action = instructions_screen.handle_event(event, mouse_pos)
+            if action == "back":
+                game_state = GAME_STATE_START
+
+        elif game_state == GAME_STATE_SETTINGS:
+            action = settings_screen.handle_event(event, mouse_pos)
+            if action == "back":
+                game_state = GAME_STATE_START
 
         elif game_state == GAME_STATE_PAUSED:
             action = pause_screen.handle_event(event)
-            if action == "restart":
+            if action == "resume":
+                # Start countdown to resume
+                game_state = GAME_STATE_COUNTDOWN
+                countdown_start_time = pygame.time.get_ticks()
+            elif action == "restart":
                 reset_game()
                 game_state = GAME_STATE_PLAYING
             elif action == "menu":
                 game_state = GAME_STATE_START
-            elif action == "quit":
-                pygame.quit()
-                sys.exit()
 
-        elif game_state == GAME_STATE_END:
-            action = end_screen.handle_event(event, mouse_pos)
+        elif game_state == GAME_STATE_RESULTS:
+            action = results_screen.handle_event(event, mouse_pos)
             if action == "play_again":
+                reset_game()
+                game_state = GAME_STATE_PLAYING
+            elif action == "menu":
                 game_state = GAME_STATE_START
-                background_music("play", "assets/sound/start-screen-music.mp3", -1, 0.7)
-            elif action == "quit":
-                pygame.quit()
-                sys.exit()
 
         elif game_state == GAME_STATE_PLAYING:
-            if (
-                event.type == pygame.MOUSEBUTTONDOWN
-                and event.button == 1
-                and game_active
-            ):
-                hit_mob_type = mob_manager.check_hit(mouse_pos)
-                
-                if hit_mob_type:
-                    bonk_channel.play(bonk_sfx)
-                    if hit_mob_type == "zombie":
-                        mob_sfx_channel.play(zombie_death_sfx)
-                    elif hit_mob_type == "spider":
-                        mob_sfx_channel.play(spider_death_sfx)
-                    elif hit_mob_type == "creeper":
-                        mob_sfx_channel.play(creeper_death_sfx)
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if current_target and current_target.check_hit(mouse_pos):
+                    # Hit!
+                    reaction_time = current_target.get_reaction_time()
+                    reaction_times.append(reaction_time)
+                    points = calculate_score(reaction_time, current_ttl)
+                    score += points
                     hits += 1
+                    
+                    trigger_hit_flash()
+                    if hit_sfx and hit_channel:
+                        hit_channel.play(hit_sfx)
+                    add_floating_text(f"+{points}", mouse_pos[0], mouse_pos[1], (255, 255, 100))
+                    
+                    spawn_target() # Spawn new target immediately
                 else:
+                    # Miss!
                     misses += 1
                     trigger_miss_flash()
-                    hurt_channel.play(hurt_sfx)
+                    if miss_sfx and miss_channel:
+                        miss_channel.play(miss_sfx)
+                    add_floating_text("MISS", mouse_pos[0], mouse_pos[1], (200, 0, 0))
 
-    # Update mobs and check game over conditions
-    if game_active and game_state == GAME_STATE_PLAYING:
-        # Update mob manager
-        events = mob_manager.update()
-        if events["misses"] > 0:
-            misses += events["misses"]
-            hurt_channel.play(hurt_sfx)
-        
-        # Check for creeper explosion (instant game over)
-        if events["explode"]:
-            mob_sfx_channel.play(creeper_death_sfx)  # Play explosion sound
-            game_active = False
-            game_over_reason = "explode"
-            end_screen.set_stats(hits, misses, reason="explode")
-            game_state = GAME_STATE_END
-            background_music("stop", None)
-            background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
-        
-        # Check game timer
-        elapsed_game_time = pygame.time.get_ticks() - game_start_time
-        if elapsed_game_time >= GAME_DURATION:
-            game_active = False
-            game_over_reason = "time"
-            end_screen.set_stats(hits, misses, reason="win")
-            game_state = GAME_STATE_END
-            background_music("stop", None)
-            background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
-        
-        # Check miss limit
-        elif misses >= max_misses:
-            game_active = False
-            game_over_reason = "misses"
-            end_screen.set_stats(hits, misses, reason="misses")
-            game_state = GAME_STATE_END
-            background_music("stop", None)
-            background_music("play", "assets/sound/game-over.mp3", loops=0, volume=0.7)
+    # Update game logic
+    if game_state == GAME_STATE_COUNTDOWN:
+        # Handle countdown
+        countdown_elapsed = pygame.time.get_ticks() - countdown_start_time
+        if countdown_elapsed >= countdown_duration:
+            # Countdown finished, resume game
+            pause_duration = pygame.time.get_ticks() - pause_start_time
+            pause_accumulated += pause_duration
+            if current_target:
+                current_target.spawn_time += pause_duration
+            game_state = GAME_STATE_PLAYING
+    
+    if game_state == GAME_STATE_PLAYING:
+        # Check if time expired
+        elapsed_time = pygame.time.get_ticks() - game_start_time - pause_accumulated
+        if elapsed_time >= GAME_DURATION:
+            # Game over
+            avg_reaction = sum(reaction_times) / len(reaction_times) if reaction_times else 0
+            best_reaction = min(reaction_times) if reaction_times else 0
+            results_screen.set_stats(score, hits, misses, avg_reaction, best_reaction)
+            game_state = GAME_STATE_RESULTS
+        else:
+            # Update difficulty
+            update_difficulty()
+            
+            # Update current target
+            if current_target:
+                current_target.update()
+                
+                # Check if target expired
+                if not current_target.is_alive():
+                    misses += 1
+                    trigger_miss_flash()
+                    if miss_sfx and miss_channel:
+                        miss_channel.play(miss_sfx)
+                    spawn_target()
 
-    if game_state == GAME_STATE_START:  # Start screen
+    # Drawing
+    if game_state == GAME_STATE_START:
         start_screen.draw(screen)
 
-    elif game_state == GAME_STATE_END:  # End screen
-        end_screen.draw(screen)
+    elif game_state == GAME_STATE_INSTRUCTIONS:
+        instructions_screen.draw(screen)
 
-    elif game_state == GAME_STATE_PAUSED:  # Pause screen
-        screen.blit(background_surf, (0, 0))
-        mob_manager.draw(screen)
-        pause_screen.draw(screen)
+    elif game_state == GAME_STATE_SETTINGS:
+        settings_screen.draw(screen)
 
-    elif game_state == GAME_STATE_PLAYING:  # Main screen
-        screen.blit(background_surf, (0, 0))
+    elif game_state == GAME_STATE_RESULTS:
+        results_screen.draw(screen)
 
-        if game_active:
-            mob_manager.draw(screen)
-
-        if game_active:
-            time_remaining = max(
-                0, GAME_DURATION - (pygame.time.get_ticks() - game_start_time)
-            )
-            seconds_remaining = time_remaining // 1000
-            minutes = seconds_remaining // 60
-            seconds = seconds_remaining % 60
-            timer_text = font.render(
-                f"Time: {minutes}:{seconds:02d}", False, (255, 0, 0)
-            )
-            screen.blit(timer_text, (SCREEN_WIDTH - 250, 10))
-
-        # Draw hits counter
-        hits_text = font.render(f"Hits: {hits}", False, (255, 64, 0))
-        screen.blit(hits_text, (10, 10))
+    elif game_state == GAME_STATE_PLAYING:
+        screen.fill(COLOR_BACKGROUND)
         
-        # Draw hearts for lives (broken hearts appear from right -> left)
-        hearts_start_x = 10
-        hearts_y = 50
-        spacing = HEART_SIZE[0] + 5
-        for i in range(max_misses):
-            x = hearts_start_x + i * spacing
-            # Determine whether this slot is a remaining life or a lost life.
-            # We want rightmost hearts to become broken first, so compare
-            # against (max_misses - misses).
-            if i < (max_misses - misses):
-                # Remaining life - full heart
-                screen.blit(heart_surf, (x, hearts_y))
-            else:
-                # Lost life - broken heart
-                screen.blit(broken_heart_surf, (x, hearts_y))
+        # Draw target
+        if current_target:
+            current_target.draw(screen)
+        
+        # Draw HUD
+        draw_hud(screen)
+        
+        # Draw feedback
+        draw_feedback_flash(screen)
+        draw_floating_text(screen)
 
-        # Red flash overlay on miss (draw late so it overlays gameplay)
-        draw_miss_flash(screen)
+    elif game_state == GAME_STATE_PAUSED:
+        # Draw game in background
+        screen.fill(COLOR_BACKGROUND)
+        if current_target:
+            current_target.draw(screen)
+        
+        # Calculate frozen time (time when pause started)
+        frozen_time = max(0, GAME_DURATION - (pause_start_time - game_start_time - pause_accumulated))
+        draw_hud(screen, frozen_time)
+        
+        # Draw pause overlay
+        pause_screen.draw(screen)
+    
+    elif game_state == GAME_STATE_COUNTDOWN:
+        # Draw game in background
+        screen.fill(COLOR_BACKGROUND)
+        if current_target:
+            current_target.draw(screen)
+        
+        # Calculate frozen time (time when pause started)
+        frozen_time = max(0, GAME_DURATION - (pause_start_time - game_start_time - pause_accumulated))
+        draw_hud(screen, frozen_time)
+        
+        # Draw countdown overlay
+        countdown_elapsed = pygame.time.get_ticks() - countdown_start_time
+        countdown_remaining = (countdown_duration - countdown_elapsed) // 1000 + 1
+        
+        # Semi-transparent overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 100))
+        screen.blit(overlay, (0, 0))
+        
+        # Countdown number
+        countdown_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 200)
+        countdown_text = countdown_font.render(str(countdown_remaining), True, (255, 255, 255))
+        countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        screen.blit(countdown_text, countdown_rect)
+        
+        # "Get Ready" text
+        ready_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 60)
+        ready_text = ready_font.render("GET READY!", True, (255, 255, 255))
+        ready_rect = ready_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
+        screen.blit(ready_text, ready_rect)
 
+    # Draw cursor
     screen.blit(
         cursor_surf,
         (mouse_pos[0] - CURSOR_HOTSPOT[0], mouse_pos[1] - CURSOR_HOTSPOT[1]),
@@ -339,3 +436,7 @@ while True:
 
     pygame.display.update()
     clock.tick(60)
+
+pygame.quit()
+sys.exit()
+

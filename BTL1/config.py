@@ -1,75 +1,42 @@
-# Screen dimensions
-SCREEN_WIDTH = 875
-SCREEN_HEIGHT = 490
+# ============================================================================
+# AIM TRAINER GAME CONFIGURATION
+# ============================================================================
+
+# Screen dimensions (Full HD)
+SCREEN_WIDTH = 1920
+SCREEN_HEIGHT = 1080
 
 # Game duration in milliseconds
-GAME_DURATION = 80000  # 80 seconds
+GAME_DURATION = 60000  # 60 seconds
 
-# Animation durations (ms)
-FADE_DURATION = 500
-HIT_DURATION = 150
-SPAWN_ANIMATION_DURATION = 300
+# Target settings
+INITIAL_TARGET_RADIUS = 50  # Starting radius in pixels
+MIN_TARGET_RADIUS = 20      # Minimum radius (hardest)
+INITIAL_TTL = 2000          # Starting time-to-live in ms
+MIN_TTL = 800               # Minimum TTL (hardest)
 
-# 6 spawn points for boats
-BOAT_SPAWN_POINTS = [
-    (100, 180),
-    (437, 150),
-    (750, 180),
-    (150, 350),
-    (437, 380),
-    (700, 350),
-]
+# Progressive difficulty settings
+DIFFICULTY_RAMP_INTERVAL = 5000  # Increase difficulty every 5 seconds
+TTL_DECREASE_AMOUNT = 100        # Decrease TTL by 100ms each interval
+RADIUS_DECREASE_AMOUNT = 3       # Decrease radius by 3px each interval
 
-# Boat size
-BOAT_SIZE = (160, 100)
+# Scoring system
+BASE_POINTS = 100           # Base points for hitting a target
+REFLEX_BONUS_CAP = 50       # Maximum bonus points for fast reaction
+# Formula: score += BASE_POINTS + int(max(0, ttl - reaction_time) / ttl * REFLEX_BONUS_CAP)
 
-# Mob sizes
-ZOMBIE_SIZE = (75, 75)
-CREEPER_SIZE = (75, 75)
-SPIDER_SIZE = (70, 50)
+# Visual feedback
+HIT_FLASH_DURATION = 150    # Duration of hit feedback in ms
+MISS_FLASH_DURATION = 200   # Duration of miss feedback in ms
 
-# Mob types
-MOB_ZOMBIE = "zombie"
-MOB_CREEPER = "creeper"
-MOB_SPIDER = "spider"
+# Cursor
+CURSOR_SIZE = (30, 30)      # Size of crosshair cursor
 
-DIFFICULTY_SETTINGS = {
-    "EASY": {
-        "ttl": 2000,
-        "spawn_interval": 1500,
-        "max_mobs": 3,
-        "creeper_rate": 0.1,
-        "spider_rate": 0.15,
-        "max_misses": 8,
-    },
-    "NORMAL": {
-        "ttl": 1500,
-        "spawn_interval": 1200,
-        "max_mobs": 4,
-        "creeper_rate": 0.15,
-        "spider_rate": 0.2,
-        "max_misses": 5,
-    },
-    "HARD": {
-        "ttl": 1000,
-        "spawn_interval": 800,
-        "max_mobs": 6,
-        "creeper_rate": 0.25,
-        "spider_rate": 0.25,
-        "max_misses": 3,
-    },
-}
+# HUD Layout
+HUD_HEIGHT = 200            # Height reserved for top HUD area
 
-# Spider specific settings
-SPIDER_FALL_SPEED = 3
-SPIDER_START_Y = -50
-
-# Creeper specific settings
-CREEPER_FUSE_TIME = 2500
-
-# Heart display size
-HEART_SIZE = (30, 30)
-
-
-def get_difficulty_config(difficulty_name):
-    return DIFFICULTY_SETTINGS.get(difficulty_name, DIFFICULTY_SETTINGS["NORMAL"])
+# Colors
+COLOR_BACKGROUND = (173, 216, 230)  # Light blue
+COLOR_HUD_TEXT = (20, 20, 20)       # Dark gray for better contrast
+COLOR_HIT_FLASH = (0, 255, 0)   # Green flash on hit
+COLOR_MISS_FLASH = (255, 0, 0)  # Red flash on miss

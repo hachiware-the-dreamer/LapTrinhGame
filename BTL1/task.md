@@ -1,5 +1,6 @@
 # TASK còn lại
 
-3. chưa có "mute/unmute toggle"
-5. Sửa lại độ khó cho nó phù hợp (easy/normal/hard) mấy cái miss được phép, tốc độ fade,... 
-6. Thêm credit cho mấy cái asset(kiếm đại cái hình nào giống rồi ghi credit vô cũng được)
+1. Hoàn thành màn hình settings (settings có thể chỉnh mọi thông số của target, hãy đọc đặc tả pls). Ngoài ra, cho user một vài settings preset có thể chọn (easy, medium, hard, asian).
+2. Thêm sprite tùy ý. Xóa các sprite không dùng nữa.
+3. Chỉnh sound. -> 2 cái trên nhớ credit trong readme
+4. Become a readme engineer và chỉnh readme.

@@ -16,7 +16,7 @@ class Button:
     def draw(self, screen):
         color = self.hover_color if self.is_hovered else self.bg_color
         pygame.draw.rect(screen, color, self.rect)
-        pygame.draw.rect(screen, (0, 0, 0), self.rect, 3)
+        pygame.draw.rect(screen, (255, 255, 255), self.rect, 3)
 
         text_surf = self.font.render(self.text, True, self.text_color)
         text_rect = text_surf.get_rect(center=self.rect.center)
@@ -30,52 +30,55 @@ class Button:
 
 
 class ScreenStart:
+    """Start screen with main menu buttons"""
+    
     def __init__(self, screen_width, screen_height):
-        # Background
-        self.background_surf = pygame.image.load("assets/screen/screen_start.png").convert()
-        self.background_surf = pygame.transform.scale(
-            self.background_surf, (screen_width, screen_height)
-        )
-
-        # Logo
-        self.logo_surf = pygame.image.load("assets/logo.png").convert_alpha()
-        logo_w = int(screen_width * 0.6)
-        logo_h = int(self.logo_surf.get_height() * (logo_w / self.logo_surf.get_width()))
-        self.logo_surf = pygame.transform.smoothscale(self.logo_surf, (logo_w, logo_h))
-        self.logo_rect = self.logo_surf.get_rect(center=(screen_width // 2, 100))
-
-        self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
-        self.button_font = pygame.font.Font("font/Pixeltype.ttf", 40)
-
         self.screen_width = screen_width
         self.screen_height = screen_height
 
-        self.button_color = (100, 100, 100)
-        self.button_hover = (150, 150, 150)
+        self.title_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 120)
+        self.button_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 50)
+
+        self.bg_color = (173, 216, 230)
+        self.button_color = (70, 130, 180)
+        self.button_hover = (100, 149, 237)
         self.text_color = (255, 255, 255)
 
-        button_width = 300
-        button_height = 60
+        button_width = 400
+        button_height = 70
         button_x = screen_width // 2 - button_width // 2
+        start_y = screen_height // 2 - 50
 
         self.start_button = Button(
             button_x,
-            200,
+            start_y,
             button_width,
             button_height,
-            "START",
+            "START GAME",
             self.button_font,
             self.text_color,
             self.button_color,
             self.button_hover,
         )
 
-        self.difficulty_button = Button(
+        self.instruction_button = Button(
             button_x,
-            280,
+            start_y + 90,
             button_width,
             button_height,
-            "DIFFICULTY: NORMAL",
+            "INSTRUCTIONS",
+            self.button_font,
+            self.text_color,
+            self.button_color,
+            self.button_hover,
+        )
+
+        self.settings_button = Button(
+            button_x,
+            start_y + 180,
+            button_width,
+            button_height,
+            "SETTINGS",
             self.button_font,
             self.text_color,
             self.button_color,
@@ -84,82 +87,80 @@ class ScreenStart:
 
         self.quit_button = Button(
             button_x,
-            360,
+            start_y + 270,
             button_width,
             button_height,
-            "QUIT",
+            "EXIT GAME",
             self.button_font,
             self.text_color,
             self.button_color,
             self.button_hover,
         )
 
-        self.difficulty_levels = ["EASY", "NORMAL", "HARD"]
-        self.current_difficulty = 1
-
     def draw(self, screen):
-        screen.blit(self.background_surf, (0, 0))
-        screen.blit(self.logo_surf, self.logo_rect)
+        screen.fill(self.bg_color)
+        
+        # Title
+        title_text = self.title_font.render("AIM TRAINER", True, (30, 60, 120))
+        title_rect = title_text.get_rect(center=(self.screen_width // 2, 200))
+        screen.blit(title_text, title_rect)
+        
+        # Subtitle
+        subtitle_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 40)
+        subtitle_text = subtitle_font.render("Test Your Reflexes", True, (60, 60, 60))
+        subtitle_rect = subtitle_text.get_rect(center=(self.screen_width // 2, 280))
+        screen.blit(subtitle_text, subtitle_rect)
 
         self.start_button.draw(screen)
-        self.difficulty_button.draw(screen)
+        self.instruction_button.draw(screen)
+        self.settings_button.draw(screen)
         self.quit_button.draw(screen)
 
     def handle_event(self, event, mouse_pos):
         """
-        Returns: 'start', 'quit', or None
+        Returns: 'start', 'instructions', 'settings', 'quit', or None
         """
         self.start_button.check_hover(mouse_pos)
-        self.difficulty_button.check_hover(mouse_pos)
+        self.instruction_button.check_hover(mouse_pos)
+        self.settings_button.check_hover(mouse_pos)
         self.quit_button.check_hover(mouse_pos)
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.start_button.is_clicked(mouse_pos):
                 return "start"
-            elif self.difficulty_button.is_clicked(mouse_pos):
-                self.cycle_difficulty()
+            elif self.instruction_button.is_clicked(mouse_pos):
+                return "instructions"
+            elif self.settings_button.is_clicked(mouse_pos):
+                return "settings"
             elif self.quit_button.is_clicked(mouse_pos):
                 return "quit"
 
         return None
 
-    def cycle_difficulty(self):
-        self.current_difficulty = (self.current_difficulty + 1) % len(
-            self.difficulty_levels
-        )
-        difficulty_text = self.difficulty_levels[self.current_difficulty]
-        self.difficulty_button.text = f"DIFFICULTY: {difficulty_text}"
 
-    def get_difficulty_name(self):
-        """Returns current difficulty name for config lookup"""
-        return self.difficulty_levels[self.current_difficulty]
-
-
-class ScreenEnd:
+class ScreenResults:
+    """Results screen showing comprehensive session statistics"""
+    
     def __init__(self, screen_width, screen_height):
-        self.background_surf = pygame.image.load("assets/screen/screen_end.png").convert()
-        self.background_surf = pygame.transform.scale(
-            self.background_surf, (screen_width, screen_height)
-        )
         self.screen_width = screen_width
         self.screen_height = screen_height
 
-        self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
-        self.stats_font = pygame.font.Font("font/Pixeltype.ttf", 50)
-        self.button_font = pygame.font.Font("font/Pixeltype.ttf", 40)
+        self.title_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 100)
+        self.stats_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 50)
+        self.button_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 45)
 
-        self.bg_color = (50, 50, 50)
-        self.button_color = (100, 100, 100)
-        self.button_hover = (150, 150, 150)
-        self.text_color = (255, 255, 255)
+        self.bg_color = (173, 216, 230)
+        self.button_color = (70, 130, 180)
+        self.button_hover = (100, 149, 237)
+        self.text_color = (20, 20, 20)
 
-        button_width = 300
-        button_height = 60
+        button_width = 350
+        button_height = 65
         button_x = screen_width // 2 - button_width // 2
 
         self.play_again_button = Button(
             button_x,
-            320,
+            screen_height - 220,
             button_width,
             button_height,
             "PLAY AGAIN",
@@ -169,129 +170,149 @@ class ScreenEnd:
             self.button_hover,
         )
 
-        self.quit_button = Button(
+        self.menu_button = Button(
             button_x,
-            400,
+            screen_height - 140,
             button_width,
             button_height,
-            "QUIT",
+            "MAIN MENU",
             self.button_font,
             self.text_color,
             self.button_color,
             self.button_hover,
         )
 
+        # Stats
+        self.score = 0
         self.hits = 0
         self.misses = 0
         self.accuracy = 0
-        self.best_accuracy = 0
-        self.game_over_reason = "win" 
+        self.avg_reaction = 0
+        self.best_reaction = 0
 
-    def set_stats(self, hits, misses, reason="win"):
+    def set_stats(self, score, hits, misses, avg_reaction, best_reaction):
         """Update the stats to display"""
+        self.score = score
         self.hits = hits
         self.misses = misses
-        self.game_over_reason = reason
+        self.avg_reaction = avg_reaction
+        self.best_reaction = best_reaction
+        
         total = hits + misses
         self.accuracy = (hits / total * 100) if total > 0 else 0
-        if self.accuracy > self.best_accuracy:
-            self.best_accuracy = self.accuracy
 
     def draw(self, screen):
-        screen.blit(self.background_surf, (0, 0))
+        screen.fill(self.bg_color)
 
-        # Title based on game over reason
-        if self.game_over_reason == "explode":
-            title = "BOOM! Creeper Exploded!"
-            color = (255, 100, 0)
-        elif self.game_over_reason == "misses":
-            title = "Game Over!"
-            color = (255, 50, 50)
-        else:
-            title = "You Win!"
-            color = (50, 255, 50)
-
-        # Draw frame/panel for stats
-        frame_width = 800
-        frame_height = 275
-        frame_x = self.screen_width // 2 - frame_width // 2
-        frame_y = 40
-        
-        # Semi-transparent background
-        frame_surf = pygame.Surface((frame_width, frame_height), pygame.SRCALPHA)
-        frame_surf.fill((0, 0, 0, 180))
-        screen.blit(frame_surf, (frame_x, frame_y))
-        
-        # Frame border
-        pygame.draw.rect(screen, (255, 255, 255), (frame_x, frame_y, frame_width, frame_height), 4)
-        pygame.draw.rect(screen, color, (frame_x + 4, frame_y + 4, frame_width - 8, frame_height - 8), 2)
-
-        title_surf = self.title_font.render(title, True, color)
-        title_rect = title_surf.get_rect(center=(self.screen_width // 2, 80))
+        # Title
+        title = "SESSION COMPLETE!"
+        title_surf = self.title_font.render(title, True, (100, 255, 100))
+        title_rect = title_surf.get_rect(center=(self.screen_width // 2, 120))
         screen.blit(title_surf, title_rect)
 
-        hits_surf = self.stats_font.render(f"Hits: {self.hits}", True, (0, 255, 0))
-        hits_rect = hits_surf.get_rect(center=(self.screen_width // 2, 130))
+        # Stats frame
+        frame_width = 900
+        frame_height = 500
+        frame_x = self.screen_width // 2 - frame_width // 2
+        frame_y = 220
+        
+        # Frame background
+        pygame.draw.rect(screen, (150, 190, 220), (frame_x, frame_y, frame_width, frame_height))
+        pygame.draw.rect(screen, (30, 60, 120), (frame_x, frame_y, frame_width, frame_height), 4)
+
+        # Display stats
+        y_offset = frame_y + 50
+        line_spacing = 75
+
+        # Score (largest)
+        score_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 70)
+        score_surf = score_font.render(f"SCORE: {self.score}", True, (200, 120, 0))
+        score_rect = score_surf.get_rect(center=(self.screen_width // 2, y_offset))
+        screen.blit(score_surf, score_rect)
+        y_offset += 90
+
+        # Hits
+        hits_surf = self.stats_font.render(f"Hits: {self.hits}", True, (0, 150, 0))
+        hits_rect = hits_surf.get_rect(center=(self.screen_width // 2, y_offset))
         screen.blit(hits_surf, hits_rect)
+        y_offset += line_spacing
 
-        misses_surf = self.stats_font.render(
-            f"Misses: {self.misses}", True, (255, 100, 100)
-        )
-        misses_rect = misses_surf.get_rect(center=(self.screen_width // 2, 180))
+        # Misses
+        misses_surf = self.stats_font.render(f"Misses: {self.misses}", True, (200, 0, 0))
+        misses_rect = misses_surf.get_rect(center=(self.screen_width // 2, y_offset))
         screen.blit(misses_surf, misses_rect)
+        y_offset += line_spacing
 
-        accuracy_surf = self.stats_font.render(
-            f"Accuracy: {self.accuracy:.1f}%", True, self.text_color
-        )
-        accuracy_rect = accuracy_surf.get_rect(center=(self.screen_width // 2, 230))
+        # Accuracy
+        accuracy_surf = self.stats_font.render(f"Accuracy: {self.accuracy:.1f}%", True, (20, 20, 20))
+        accuracy_rect = accuracy_surf.get_rect(center=(self.screen_width // 2, y_offset))
         screen.blit(accuracy_surf, accuracy_rect)
+        y_offset += line_spacing
 
-        best_accuracy_surf = self.stats_font.render(
-            f"Best Accuracy: {self.best_accuracy:.1f}%", True, self.text_color
-        )
-        best_accuracy_rect = best_accuracy_surf.get_rect(
-            center=(self.screen_width // 2, 280)
-        )
-        screen.blit(best_accuracy_surf, best_accuracy_rect)
+        # Average reaction time
+        avg_surf = self.stats_font.render(f"Avg Reaction: {self.avg_reaction:.0f}ms", True, (30, 60, 120))
+        avg_rect = avg_surf.get_rect(center=(self.screen_width // 2, y_offset))
+        screen.blit(avg_surf, avg_rect)
+        y_offset += line_spacing
+
+        # Best reaction time
+        best_surf = self.stats_font.render(f"Best Reaction: {self.best_reaction:.0f}ms", True, (120, 60, 150))
+        best_rect = best_surf.get_rect(center=(self.screen_width // 2, y_offset))
+        screen.blit(best_surf, best_rect)
 
         self.play_again_button.draw(screen)
-        self.quit_button.draw(screen)
+        self.menu_button.draw(screen)
 
     def handle_event(self, event, mouse_pos):
         """
-        Returns: 'play_again', 'quit', or None
+        Returns: 'play_again', 'menu', or None
         """
         self.play_again_button.check_hover(mouse_pos)
-        self.quit_button.check_hover(mouse_pos)
+        self.menu_button.check_hover(mouse_pos)
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.play_again_button.is_clicked(mouse_pos):
                 return "play_again"
-            elif self.quit_button.is_clicked(mouse_pos):
-                return "quit"
+            elif self.menu_button.is_clicked(mouse_pos):
+                return "menu"
 
         return None
 
 
 class ScreenPause:
+    """Pause screen overlay"""
+    
     def __init__(self, screen_width, screen_height):
         self.width = screen_width
         self.height = screen_height
 
-        self.title_font = pygame.font.Font("font/Pixeltype.ttf", 80)
-        self.button_font = pygame.font.Font("font/Pixeltype.ttf", 40)
+        self.title_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 100)
+        self.button_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 45)
 
-        self.button_color = (100, 100, 100)
-        self.button_hover = (150, 150, 150)
+        self.button_color = (70, 130, 180)
+        self.button_hover = (100, 149, 237)
         self.text_color = (255, 255, 255)
 
-        button_width = 300
-        button_height = 60
+        button_width = 350
+        button_height = 65
         button_x = screen_width // 2 - button_width // 2
+        start_y = screen_height // 2 - 50
+
+        self.resume_button = Button(
+            button_x,
+            start_y,
+            button_width,
+            button_height,
+            "RESUME",
+            self.button_font,
+            self.text_color,
+            self.button_color,
+            self.button_hover,
+        )
 
         self.restart_button = Button(
             button_x,
-            200,
+            start_y + 85,
             button_width,
             button_height,
             "RESTART",
@@ -303,7 +324,7 @@ class ScreenPause:
 
         self.menu_button = Button(
             button_x,
-            280,
+            start_y + 170,
             button_width,
             button_height,
             "MAIN MENU",
@@ -313,45 +334,164 @@ class ScreenPause:
             self.button_hover,
         )
 
-        self.quit_button = Button(
-            button_x,
-            360,
+    def draw(self, surface):
+        # Dark overlay
+        overlay = pygame.Surface((self.width, self.height))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        surface.blit(overlay, (0, 0))
+
+        # Title
+        title = self.title_font.render("PAUSED", True, (255, 255, 255))
+        title_rect = title.get_rect(center=(self.width // 2, 250))
+        surface.blit(title, title_rect)
+
+        self.resume_button.draw(surface)
+        self.restart_button.draw(surface)
+        self.menu_button.draw(surface)
+
+    def handle_event(self, event):
+        mouse_pos = pygame.mouse.get_pos()
+
+        self.resume_button.check_hover(mouse_pos)
+        self.restart_button.check_hover(mouse_pos)
+        self.menu_button.check_hover(mouse_pos)
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.resume_button.is_clicked(mouse_pos):
+                return "resume"
+            if self.restart_button.is_clicked(mouse_pos):
+                return "restart"
+            if self.menu_button.is_clicked(mouse_pos):
+                return "menu"
+
+        return None
+
+
+class ScreenInstructions:
+    """Instructions screen"""
+    
+    def __init__(self, screen_width, screen_height):
+        self.width = screen_width
+        self.height = screen_height
+        
+        self.title_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 90)
+        self.text_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 40)
+        self.button_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 45)
+        
+        self.bg_color = (173, 216, 230)
+        self.button_color = (70, 130, 180)
+        self.button_hover = (100, 149, 237)
+        self.text_color = (20, 20, 20)
+        
+        # Back button
+        button_width = 300
+        button_height = 65
+        self.back_button = Button(
+            screen_width // 2 - button_width // 2,
+            screen_height - 120,
             button_width,
             button_height,
-            "QUIT",
+            "BACK",
             self.button_font,
             self.text_color,
             self.button_color,
             self.button_hover,
         )
-
-    def draw(self, surface):
-        overlay = pygame.Surface((self.width, self.height))
-        overlay.set_alpha(128)
-        overlay.fill((0, 0, 0))
-        surface.blit(overlay, (0, 0))
-
-        title = self.title_font.render("PAUSED", True, (255, 255, 255))
+    
+    def draw(self, screen):
+        screen.fill(self.bg_color)
+        
+        # Title
+        title = self.title_font.render("INSTRUCTIONS", True, (30, 60, 120))
         title_rect = title.get_rect(center=(self.width // 2, 100))
-        surface.blit(title, title_rect)
-
-        self.restart_button.draw(surface)
-        self.menu_button.draw(surface)
-        self.quit_button.draw(surface)
-
-    def handle_event(self, event):
-        mouse_pos = pygame.mouse.get_pos()
-
-        self.restart_button.check_hover(mouse_pos)
-        self.menu_button.check_hover(mouse_pos)
-        self.quit_button.check_hover(mouse_pos)
-
+        screen.blit(title, title_rect)
+        
+        # Instructions text
+        instructions = [
+            "• Click on targets as quickly as possible",
+            "• Each target has a limited lifetime (TTL)",
+            "• Score points based on speed and accuracy",
+            "• Game becomes harder over time",
+            "• Press ESC to pause during gameplay",
+            "",
+            "Scoring Formula:",
+            "  Score = 100 + Reflex Bonus",
+            "  Reflex Bonus = (TTL - Reaction Time) / TTL * 50",
+            "",
+            "Good luck!",
+        ]
+        
+        y = 220
+        for line in instructions:
+            text_surf = self.text_font.render(line, True, self.text_color)
+            text_rect = text_surf.get_rect(center=(self.width // 2, y))
+            screen.blit(text_surf, text_rect)
+            y += 55
+        
+        self.back_button.draw(screen)
+    
+    def handle_event(self, event, mouse_pos):
+        self.back_button.check_hover(mouse_pos)
+        
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.restart_button.is_clicked(mouse_pos):
-                return "restart"
-            if self.menu_button.is_clicked(mouse_pos):
-                return "menu"
-            if self.quit_button.is_clicked(mouse_pos):
-                return "quit"
+            if self.back_button.is_clicked(mouse_pos):
+                return "back"
+        
+        return None
 
+
+class ScreenSettings:
+    """Settings screen (placeholder for now)"""
+    
+    def __init__(self, screen_width, screen_height):
+        self.width = screen_width
+        self.height = screen_height
+        
+        self.title_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 90)
+        self.text_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 45)
+        self.button_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 45)
+        
+        self.bg_color = (173, 216, 230)
+        self.button_color = (70, 130, 180)
+        self.button_hover = (100, 149, 237)
+        self.text_color = (20, 20, 20)
+        
+        # Back button
+        button_width = 300
+        button_height = 65
+        self.back_button = Button(
+            screen_width // 2 - button_width // 2,
+            screen_height - 120,
+            button_width,
+            button_height,
+            "BACK",
+            self.button_font,
+            self.text_color,
+            self.button_color,
+            self.button_hover,
+        )
+    
+    def draw(self, screen):
+        screen.fill(self.bg_color)
+        
+        # Title
+        title = self.title_font.render("SETTINGS", True, (30, 60, 120))
+        title_rect = title.get_rect(center=(self.width // 2, 100))
+        screen.blit(title, title_rect)
+        
+        # Placeholder text
+        text = self.text_font.render("Settings coming soon...", True, self.text_color)
+        text_rect = text.get_rect(center=(self.width // 2, self.height // 2))
+        screen.blit(text, text_rect)
+        
+        self.back_button.draw(screen)
+    
+    def handle_event(self, event, mouse_pos):
+        self.back_button.check_hover(mouse_pos)
+        
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.back_button.is_clicked(mouse_pos):
+                return "back"
+        
         return None
