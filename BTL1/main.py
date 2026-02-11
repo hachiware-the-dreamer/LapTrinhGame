@@ -1,22 +1,23 @@
+ 
 import pygame
 import sys
+
+import config
 from screens import ScreenStart, ScreenResults, ScreenPause, ScreenInstructions, ScreenSettings
 from target import Target
-from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, GAME_DURATION,
-    INITIAL_TARGET_RADIUS, MIN_TARGET_RADIUS,
-    INITIAL_TTL, MIN_TTL,
-    DIFFICULTY_RAMP_INTERVAL, TTL_DECREASE_AMOUNT, RADIUS_DECREASE_AMOUNT,
-    BASE_POINTS, REFLEX_BONUS_CAP,
-    HIT_FLASH_DURATION, MISS_FLASH_DURATION,
-    CURSOR_SIZE, COLOR_BACKGROUND, COLOR_HUD_TEXT,
-    COLOR_HIT_FLASH, COLOR_MISS_FLASH, HUD_HEIGHT
-)
 
 pygame.init()
-pygame.mixer.init()
+
+# Audio init (graceful fallback for environments without ALSA devices)
+audio_enabled = True
+try:
+    pygame.mixer.init()
+except pygame.error:
+    print("Warning: Audio device not found, continuing without sound.")
 
 # Screen setup
+SCREEN_WIDTH = config.SCREEN_WIDTH
+SCREEN_HEIGHT = config.SCREEN_HEIGHT
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Aim Trainer")
 clock = pygame.time.Clock()
@@ -26,8 +27,8 @@ large_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.tt
 # Cursor
 pygame.mouse.set_visible(False)
 cursor_surf = pygame.image.load("assets/crosshair.png").convert_alpha()
-cursor_surf = pygame.transform.smoothscale(cursor_surf, CURSOR_SIZE)
-CURSOR_HOTSPOT = (CURSOR_SIZE[0] // 2, CURSOR_SIZE[1] // 2)
+cursor_surf = pygame.transform.smoothscale(cursor_surf, config.CURSOR_SIZE)
+CURSOR_HOTSPOT = (config.CURSOR_SIZE[0] // 2, config.CURSOR_SIZE[1] // 2)
 
 # Sound effects
 try:
@@ -74,8 +75,8 @@ pause_start_time = 0
 pause_accumulated = 0  # Total time spent paused
 countdown_start_time = 0
 countdown_duration = 3000  # 3 second countdown
-current_ttl = INITIAL_TTL
-current_radius = INITIAL_TARGET_RADIUS
+current_ttl = config.SETTINGS["initial_ttl"]
+current_radius = config.SETTINGS["initial_target_radius"]
 last_difficulty_increase = 0
 
 # Visual feedback
@@ -102,18 +103,18 @@ def draw_feedback_flash(surface):
     
     # Hit flash
     hit_elapsed = current_time - hit_flash_start
-    if 0 <= hit_elapsed < HIT_FLASH_DURATION:
-        alpha = int(100 * (1.0 - hit_elapsed / HIT_FLASH_DURATION))
+    if 0 <= hit_elapsed < config.HIT_FLASH_DURATION:
+        alpha = int(100 * (1.0 - hit_elapsed / config.HIT_FLASH_DURATION))
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.rect(overlay, (*COLOR_HIT_FLASH, alpha), overlay.get_rect(), width=15)
+        pygame.draw.rect(overlay, (*config.COLOR_HIT_FLASH, alpha), overlay.get_rect(), width=15)
         surface.blit(overlay, (0, 0))
     
     # Miss flash
     miss_elapsed = current_time - miss_flash_start
-    if 0 <= miss_elapsed < MISS_FLASH_DURATION:
-        alpha = int(120 * (1.0 - miss_elapsed / MISS_FLASH_DURATION))
+    if 0 <= miss_elapsed < config.MISS_FLASH_DURATION:
+        alpha = int(120 * (1.0 - miss_elapsed / config.MISS_FLASH_DURATION))
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.rect(overlay, (*COLOR_MISS_FLASH, alpha), overlay.get_rect(), width=15)
+        pygame.draw.rect(overlay, (*config.COLOR_MISS_FLASH, alpha), overlay.get_rect(), width=15)
         surface.blit(overlay, (0, 0))
 
 
@@ -157,8 +158,8 @@ def spawn_target():
 
 def calculate_score(reaction_time, ttl):
     """Calculate score based on reaction time and TTL"""
-    reflex_bonus = max(0, ttl - reaction_time) / ttl * REFLEX_BONUS_CAP
-    return BASE_POINTS + int(reflex_bonus)
+    reflex_bonus = max(0, ttl - reaction_time) / ttl * config.REFLEX_BONUS_CAP
+    return config.BASE_POINTS + int(reflex_bonus)
 
 
 def update_difficulty():
@@ -166,13 +167,19 @@ def update_difficulty():
     global current_ttl, current_radius, last_difficulty_increase
     
     elapsed = pygame.time.get_ticks() - game_start_time
-    intervals_passed = elapsed // DIFFICULTY_RAMP_INTERVAL
+    intervals_passed = elapsed // config.SETTINGS["difficulty_ramp_interval"]
     
     if intervals_passed > last_difficulty_increase:
         # Decrease TTL
-        current_ttl = max(MIN_TTL, current_ttl - TTL_DECREASE_AMOUNT)
+        current_ttl = max(
+            config.SETTINGS["min_ttl"],
+            current_ttl - config.SETTINGS["ttl_decrease_amount"],
+        )
         # Decrease radius
-        current_radius = max(MIN_TARGET_RADIUS, current_radius - RADIUS_DECREASE_AMOUNT)
+        current_radius = max(
+            config.SETTINGS["min_target_radius"],
+            current_radius - config.SETTINGS["radius_decrease_amount"],
+        )
         last_difficulty_increase = intervals_passed
 
 
@@ -189,8 +196,8 @@ def reset_game():
     floating_text = []
     pause_accumulated = 0
     
-    current_ttl = INITIAL_TTL
-    current_radius = INITIAL_TARGET_RADIUS
+    current_ttl = config.SETTINGS["initial_ttl"]
+    current_radius = config.SETTINGS["initial_target_radius"]
     last_difficulty_increase = 0
     
     game_start_time = pygame.time.get_ticks()
@@ -208,10 +215,14 @@ def draw_hud(surface, frozen_time_ms=None):
     if frozen_time_ms is not None:
         time_remaining = frozen_time_ms
     else:
-        time_remaining = max(0, GAME_DURATION - (pygame.time.get_ticks() - game_start_time - pause_accumulated))
+        time_remaining = max(
+            0,
+            config.SETTINGS["game_duration"]
+            - (pygame.time.get_ticks() - game_start_time - pause_accumulated),
+        )
     
     seconds = time_remaining // 1000
-    time_text = large_font.render(f"{seconds}s", True, COLOR_HUD_TEXT)
+    time_text = large_font.render(f"{seconds}s", True, config.COLOR_HUD_TEXT)
     surface.blit(time_text, (SCREEN_WIDTH // 2 - time_text.get_width() // 2, 30))
     
     # Score (top left)
@@ -335,7 +346,7 @@ while running:
     if game_state == GAME_STATE_PLAYING:
         # Check if time expired
         elapsed_time = pygame.time.get_ticks() - game_start_time - pause_accumulated
-        if elapsed_time >= GAME_DURATION:
+        if elapsed_time >= config.SETTINGS["game_duration"]:
             # Game over
             avg_reaction = sum(reaction_times) / len(reaction_times) if reaction_times else 0
             best_reaction = min(reaction_times) if reaction_times else 0
@@ -371,7 +382,7 @@ while running:
         results_screen.draw(screen)
 
     elif game_state == GAME_STATE_PLAYING:
-        screen.fill(COLOR_BACKGROUND)
+        screen.fill(config.COLOR_BACKGROUND)
         
         # Draw target
         if current_target:
@@ -386,12 +397,16 @@ while running:
 
     elif game_state == GAME_STATE_PAUSED:
         # Draw game in background
-        screen.fill(COLOR_BACKGROUND)
+        screen.fill(config.COLOR_BACKGROUND)
         if current_target:
             current_target.draw(screen)
         
         # Calculate frozen time (time when pause started)
-        frozen_time = max(0, GAME_DURATION - (pause_start_time - game_start_time - pause_accumulated))
+        frozen_time = max(
+            0,
+            config.SETTINGS["game_duration"]
+            - (pause_start_time - game_start_time - pause_accumulated),
+        )
         draw_hud(screen, frozen_time)
         
         # Draw pause overlay
@@ -399,12 +414,16 @@ while running:
     
     elif game_state == GAME_STATE_COUNTDOWN:
         # Draw game in background
-        screen.fill(COLOR_BACKGROUND)
+        screen.fill(config.COLOR_BACKGROUND)
         if current_target:
             current_target.draw(screen)
         
         # Calculate frozen time (time when pause started)
-        frozen_time = max(0, GAME_DURATION - (pause_start_time - game_start_time - pause_accumulated))
+        frozen_time = max(
+            0,
+            config.SETTINGS["game_duration"]
+            - (pause_start_time - game_start_time - pause_accumulated),
+        )
         draw_hud(screen, frozen_time)
         
         # Draw countdown overlay

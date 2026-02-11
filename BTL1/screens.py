@@ -1,5 +1,7 @@
 import pygame
 
+import config
+
 
 class Button:
     def __init__(
@@ -442,21 +444,145 @@ class ScreenInstructions:
 
 
 class ScreenSettings:
-    """Settings screen (placeholder for now)"""
+    """Settings screen for gameplay parameters"""
     
     def __init__(self, screen_width, screen_height):
         self.width = screen_width
         self.height = screen_height
         
         self.title_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 90)
-        self.text_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 45)
+        self.text_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 40)
         self.button_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 45)
+        self.value_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 40)
         
         self.bg_color = (173, 216, 230)
         self.button_color = (70, 130, 180)
         self.button_hover = (100, 149, 237)
         self.text_color = (20, 20, 20)
         
+        # Preset buttons
+        preset_width = 220
+        preset_height = 60
+        preset_y = 190
+        preset_gap = 30
+        total_width = preset_width * 3 + preset_gap * 2
+        preset_x = screen_width // 2 - total_width // 2
+
+        self.preset_buttons = {
+            "easy": Button(
+                preset_x,
+                preset_y,
+                preset_width,
+                preset_height,
+                "EASY",
+                self.button_font,
+                self.text_color,
+                self.button_color,
+                self.button_hover,
+            ),
+            "medium": Button(
+                preset_x + preset_width + preset_gap,
+                preset_y,
+                preset_width,
+                preset_height,
+                "MEDIUM",
+                self.button_font,
+                self.text_color,
+                self.button_color,
+                self.button_hover,
+            ),
+            "hard": Button(
+                preset_x + (preset_width + preset_gap) * 2,
+                preset_y,
+                preset_width,
+                preset_height,
+                "HARD",
+                self.button_font,
+                self.text_color,
+                self.button_color,
+                self.button_hover,
+            ),
+        }
+
+        # Settings rows
+        self.setting_rows = []
+        row_start_y = 300
+        row_gap = 70
+        label_x = 220
+        value_x = 1050
+        button_size = 50
+        button_gap = 18
+
+        row_defs = [
+            {
+                "key": "game_duration",
+                "label": "Game Duration",
+                "unit": "ms",
+                "step": 5000,
+            },
+            {
+                "key": "initial_target_radius",
+                "label": "Initial Target Size",
+                "unit": "px",
+                "step": 2,
+            },
+            {
+                "key": "min_target_radius",
+                "label": "Minimum Target Size",
+                "unit": "px",
+                "step": 2,
+            },
+            {
+                "key": "initial_ttl",
+                "label": "Initial TTL",
+                "unit": "ms",
+                "step": 100,
+            },
+            {
+                "key": "ttl_decrease_amount",
+                "label": "TTL Decrease",
+                "unit": "ms",
+                "step": 10,
+            },
+            {
+                "key": "radius_decrease_amount",
+                "label": "Size Decrease",
+                "unit": "px",
+                "step": 1,
+            },
+        ]
+
+        for index, row in enumerate(row_defs):
+            y = row_start_y + index * row_gap
+            minus_button = Button(
+                value_x + 110,
+                y - button_size // 2,
+                button_size,
+                button_size,
+                "-",
+                self.button_font,
+                self.text_color,
+                self.button_color,
+                self.button_hover,
+            )
+            plus_button = Button(
+                value_x + 110 + button_size + button_gap,
+                y - button_size // 2,
+                button_size,
+                button_size,
+                "+",
+                self.button_font,
+                self.text_color,
+                self.button_color,
+                self.button_hover,
+            )
+            row["y"] = y
+            row["label_x"] = label_x
+            row["value_x"] = value_x
+            row["minus_button"] = minus_button
+            row["plus_button"] = plus_button
+            self.setting_rows.append(row)
+
         # Back button
         button_width = 300
         button_height = 65
@@ -479,19 +605,58 @@ class ScreenSettings:
         title = self.title_font.render("SETTINGS", True, (30, 60, 120))
         title_rect = title.get_rect(center=(self.width // 2, 100))
         screen.blit(title, title_rect)
-        
-        # Placeholder text
-        text = self.text_font.render("Settings coming soon...", True, self.text_color)
-        text_rect = text.get_rect(center=(self.width // 2, self.height // 2))
-        screen.blit(text, text_rect)
-        
+
+        subtitle = self.text_font.render("Presets", True, (60, 60, 60))
+        subtitle_rect = subtitle.get_rect(center=(self.width // 2, 150))
+        screen.blit(subtitle, subtitle_rect)
+
+        for button in self.preset_buttons.values():
+            button.draw(screen)
+
+        # Settings rows
+        for row in self.setting_rows:
+            label_surf = self.text_font.render(row["label"], True, self.text_color)
+            label_rect = label_surf.get_rect(midleft=(row["label_x"], row["y"]))
+            screen.blit(label_surf, label_rect)
+
+            value = config.SETTINGS[row["key"]]
+            value_text = f"{value}{row['unit']}"
+            value_surf = self.value_font.render(value_text, True, (30, 60, 120))
+            value_rect = value_surf.get_rect(center=(row["value_x"], row["y"]))
+            screen.blit(value_surf, value_rect)
+
+            row["minus_button"].draw(screen)
+            row["plus_button"].draw(screen)
+
         self.back_button.draw(screen)
     
     def handle_event(self, event, mouse_pos):
         self.back_button.check_hover(mouse_pos)
-        
+        for button in self.preset_buttons.values():
+            button.check_hover(mouse_pos)
+        for row in self.setting_rows:
+            row["minus_button"].check_hover(mouse_pos)
+            row["plus_button"].check_hover(mouse_pos)
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.back_button.is_clicked(mouse_pos):
                 return "back"
-        
+
+            for name, button in self.preset_buttons.items():
+                if button.is_clicked(mouse_pos):
+                    preset = config.PRESETS.get(name)
+                    if preset:
+                        config.apply_settings(preset)
+                    return None
+
+            for row in self.setting_rows:
+                key = row["key"]
+                current = config.SETTINGS[key]
+                if row["minus_button"].is_clicked(mouse_pos):
+                    config.apply_settings({key: current - row["step"]})
+                    return None
+                if row["plus_button"].is_clicked(mouse_pos):
+                    config.apply_settings({key: current + row["step"]})
+                    return None
+
         return None
