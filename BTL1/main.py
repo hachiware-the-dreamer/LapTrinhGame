@@ -34,7 +34,7 @@ CURSOR_HOTSPOT = (config.CURSOR_SIZE[0] // 2, config.CURSOR_SIZE[1] // 2)
 
 # Sound effects
 try:
-    hit_sfx = pygame.mixer.Sound("assets/sound/bonk-sound-effect.mp3")
+    hit_sfx = pygame.mixer.Sound("assets/sound/shoot.mp3")
     hit_sfx.set_volume(0.3)
     hit_channel = pygame.mixer.Channel(1)
 except:
