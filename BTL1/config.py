@@ -32,9 +32,6 @@ MISS_FLASH_DURATION = 200   # Duration of miss feedback in ms
 # Cursor
 CURSOR_SIZE = (30, 30)      # Size of crosshair cursor
 
-# HUD Layout
-HUD_HEIGHT = 200            # Height reserved for top HUD area
-
 # Colors
 COLOR_BACKGROUND = (173, 216, 230)  # Light blue
 COLOR_HUD_TEXT = (20, 20, 20)       # Dark gray for better contrast

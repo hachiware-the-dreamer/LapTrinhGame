@@ -9,7 +9,6 @@ from target import Target
 pygame.init()
 
 # Audio init (graceful fallback for environments without ALSA devices)
-audio_enabled = True
 try:
     pygame.mixer.init()
 except pygame.error:
@@ -23,6 +22,9 @@ pygame.display.set_caption("Aim Trainer")
 clock = pygame.time.Clock()
 font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 50)
 large_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 70)
+small_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 30)
+countdown_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 200)
+ready_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 60)
 
 # Cursor
 pygame.mouse.set_visible(False)
@@ -245,7 +247,6 @@ def draw_hud(surface, frozen_time_ms=None):
     surface.blit(misses_text, (30, 160))
     
     # Current difficulty info (top right)
-    small_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 30)
     ttl_text = small_font.render(f"TTL: {current_ttl}ms", True, (80, 80, 80))
     radius_text = small_font.render(f"Size: {current_radius}px", True, (80, 80, 80))
     surface.blit(ttl_text, (SCREEN_WIDTH - 200, 30))
@@ -383,7 +384,7 @@ while running:
                 current_target.update()
                 
                 # Check if target expired
-                if not current_target.is_alive():
+                if not current_target.alive:
                     misses += 1
                     trigger_miss_flash()
                     if miss_sfx and miss_channel:
@@ -461,13 +462,11 @@ while running:
         screen.blit(overlay, (0, 0))
         
         # Countdown number
-        countdown_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 200)
         countdown_text = countdown_font.render(str(countdown_remaining), True, (255, 255, 255))
         countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
         screen.blit(countdown_text, countdown_rect)
         
         # "Get Ready" text
-        ready_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 60)
         ready_text = ready_font.render("GET READY!", True, (255, 255, 255))
         ready_rect = ready_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
         screen.blit(ready_text, ready_rect)
