@@ -79,6 +79,11 @@ current_ttl = config.SETTINGS["initial_ttl"]
 current_radius = config.SETTINGS["initial_target_radius"]
 last_difficulty_increase = 0
 
+# Spawn delay between rounds (100-250 ms)
+SPAWN_DELAY = 150  # ms
+spawn_delay_timer = 0.0  # accumulates dt in seconds
+waiting_to_spawn = False
+
 # Visual feedback
 hit_flash_start = -10000
 miss_flash_start = -10000
@@ -187,7 +192,7 @@ def reset_game():
     """Reset game state for new session"""
     global score, hits, misses, reaction_times, game_start_time
     global current_target, current_ttl, current_radius, last_difficulty_increase
-    global floating_text, pause_accumulated
+    global floating_text, pause_accumulated, spawn_delay_timer, waiting_to_spawn
     
     score = 0
     hits = 0
@@ -195,6 +200,8 @@ def reset_game():
     reaction_times = []
     floating_text = []
     pause_accumulated = 0
+    spawn_delay_timer = 0.0
+    waiting_to_spawn = False
     
     current_ttl = config.SETTINGS["initial_ttl"]
     current_radius = config.SETTINGS["initial_target_radius"]
@@ -248,6 +255,8 @@ def draw_hud(surface, frozen_time_ms=None):
 # Main game loop
 running = True
 while running:
+    # dt = frame time in seconds; used for frame-rate-independent logic
+    dt = clock.tick(60) / 1000.0
     mouse_pos = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
@@ -309,7 +318,9 @@ while running:
 
         elif game_state == GAME_STATE_PLAYING:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if current_target and current_target.check_hit(mouse_pos):
+                if waiting_to_spawn:
+                    pass  # Ignore clicks during spawn delay
+                elif current_target and current_target.check_hit(mouse_pos):
                     # Hit!
                     reaction_time = current_target.get_reaction_time()
                     reaction_times.append(reaction_time)
@@ -322,7 +333,10 @@ while running:
                         hit_channel.play(hit_sfx)
                     add_floating_text(f"+{points}", mouse_pos[0], mouse_pos[1], (255, 255, 100))
                     
-                    spawn_target() # Spawn new target immediately
+                    # Start spawn delay before next target
+                    current_target = None
+                    waiting_to_spawn = True
+                    spawn_delay_timer = 0.0
                 else:
                     # Miss!
                     misses += 1
@@ -356,6 +370,14 @@ while running:
             # Update difficulty
             update_difficulty()
             
+            # Handle spawn delay using dt (frame-rate independent)
+            if waiting_to_spawn:
+                spawn_delay_timer += dt
+                if spawn_delay_timer >= SPAWN_DELAY / 1000.0:
+                    waiting_to_spawn = False
+                    spawn_delay_timer = 0.0
+                    spawn_target()
+            
             # Update current target
             if current_target:
                 current_target.update()
@@ -366,7 +388,10 @@ while running:
                     trigger_miss_flash()
                     if miss_sfx and miss_channel:
                         miss_channel.play(miss_sfx)
-                    spawn_target()
+                    # Start spawn delay before next target
+                    current_target = None
+                    waiting_to_spawn = True
+                    spawn_delay_timer = 0.0
 
     # Drawing
     if game_state == GAME_STATE_START:
@@ -454,7 +479,6 @@ while running:
     )
 
     pygame.display.update()
-    clock.tick(60)
 
 pygame.quit()
 sys.exit()

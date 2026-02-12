@@ -169,7 +169,6 @@ BTL1/
 ├── target.py         # Target class (concentric circles)
 ├── screens.py        # All screen classes (Start, Results, Pause, etc.)
 ├── config.py         # Game configuration and constants
-├── mobs.py           # (Legacy - not used in aim trainer)
 ├── readme.md         # This file
 ├── assets/
 │   ├── crosshair.png # Cursor image
