@@ -18,15 +18,10 @@ class Target:
         """
         self.radius = radius
         self.ttl = ttl
-        self.screen_width = screen_width
-        self.screen_height = screen_height
         
-        # Random position using formula: r < x < (Width - r) and HUD_HEIGHT < y < (Height - r)
-        # Leave HUD_HEIGHT space at top (200px) and margin at bottom
-        HUD_HEIGHT = 200
-        margin = radius + 20
-        self.x = random.randint(margin, screen_width - margin)
-        self.y = random.randint(HUD_HEIGHT + margin, screen_height - margin)
+        # Random position using formula: r < x < (Width - r) and r < y < (Height - r)
+        self.x = random.randint(radius, screen_width - radius)
+        self.y = random.randint(radius, screen_height - radius)
         
         # Timing
         self.spawn_time = pygame.time.get_ticks()
@@ -105,7 +100,3 @@ class Target:
             int: Reaction time in ms
         """
         return pygame.time.get_ticks() - self.spawn_time
-    
-    def is_alive(self):
-        """Check if target is still alive"""
-        return self.alive

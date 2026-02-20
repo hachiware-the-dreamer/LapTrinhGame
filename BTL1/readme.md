@@ -169,7 +169,6 @@ BTL1/
 ├── target.py         # Target class (concentric circles)
 ├── screens.py        # All screen classes (Start, Results, Pause, etc.)
 ├── config.py         # Game configuration and constants
-├── mobs.py           # (Legacy - not used in aim trainer)
 ├── readme.md         # This file
 ├── assets/
 │   ├── crosshair.png # Cursor image
@@ -193,7 +192,7 @@ BTL1/
 ## 🎨 Asset References
 
 ### Audio:
-* **Hit Sound:**  https://pixabay.com/vi/sound-effects/search/bonk/
+* **Hit Sound:**  https://elevenlabs.io/sound-effects/pistol
 * **Miss Sound:**  https://minecraft.wiki/w/File:Player_hurt1.ogg
 * **Open Sans Font:** https://fonts.google.com/specimen/Open+Sans
 * **Crosshair:** https://www.flaticon.com/free-icon/crosshair_1545215?term=crosshair&page=1&position=10&origin=tag&related_id=1545215
