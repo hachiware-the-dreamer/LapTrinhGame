@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7323628498441234048}
   - component: {fileID: 9206392092211748200}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: TurretVisual
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -79,7 +79,7 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 0
+  m_SortingOrder: 1
   m_MaskInteraction: 0
   m_Sprite: {fileID: -3052354834422261489, guid: 021383af1f0708f47a28286456dbff88, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -102,9 +102,11 @@ GameObject:
   - component: {fileID: 7529213634561925342}
   - component: {fileID: 792650407944487540}
   - component: {fileID: 5671045940601236938}
-  m_Layer: 0
+  - component: {fileID: 6805106245796364400}
+  - component: {fileID: 7413400566580520687}
+  m_Layer: 7
   m_Name: Tank_P1
-  m_TagString: Untagged
+  m_TagString: Player1
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -191,6 +193,35 @@ MonoBehaviour:
   wallLayerMask:
     serializedVersion: 2
     m_Bits: 64
+--- !u!114 &6805106245796364400
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2338118203679265390}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93ec9a35da898d447b612baad38490f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TankShooting
+  bulletPrefab: {fileID: 1329927881643146662, guid: 535e67fd4561ac24397a3f169572f7c1, type: 3}
+  firePoint: {fileID: 1233022431652681800}
+  fireAction: {fileID: 1120369429361536294, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
+  fireCooldown: 0.5
+--- !u!114 &7413400566580520687
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2338118203679265390}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 119842e42fdd08b4880f462564ec50bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TankHealth
+  maxHealth: 3
 --- !u!1 &3313125869319226013
 GameObject:
   m_ObjectHideFlags: 0
@@ -201,7 +232,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2530919736413589026}
   - component: {fileID: 4234995288473317097}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: BodyVisual
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -291,7 +322,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4631286626189495457}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Turret
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -324,7 +355,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1233022431652681800}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: FirePoint
   m_TagString: Untagged
   m_Icon: {fileID: 0}
