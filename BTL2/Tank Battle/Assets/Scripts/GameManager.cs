@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
+using TMPro;
 
 public class GameManager : MonoBehaviour
 {
@@ -8,11 +8,26 @@ public class GameManager : MonoBehaviour
 
     [Header("End Screen UI")]
     [SerializeField] GameObject endScreenPanel;   // Assign a UI panel (disabled by default)
-    [SerializeField] Text winnerText;             // Assign a Text to show who won
+    private TextMeshProUGUI winnerText;           // Auto-found from endScreenPanel children
 
     void Awake()
     {
         Instance = this;
+
+        // Auto-find the TMP text inside the end screen panel
+        if (endScreenPanel != null)
+        {
+            winnerText = endScreenPanel.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (winnerText != null)
+            {
+                winnerText.enableWordWrapping = false;
+                winnerText.enableAutoSizing = true;
+                winnerText.fontSizeMin = 10;
+                winnerText.fontSizeMax = 72;
+                winnerText.alignment = TextAlignmentOptions.Center;
+                winnerText.overflowMode = TextOverflowModes.Overflow;
+            }
+        }
     }
 
     /// <summary>
@@ -21,7 +36,7 @@ public class GameManager : MonoBehaviour
     public void OnTankDestroyed(string destroyedTag)
     {
         // The winner is the OTHER player
-        string winner = (destroyedTag == "Player1") ? "Player 2 Wins!" : "Player 1 Wins!";
+        string winner = (destroyedTag == "Player1") ? "Player 2 Win!" : "Player 1 Win!";
 
         if (winnerText != null)
             winnerText.text = winner;
