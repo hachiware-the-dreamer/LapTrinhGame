@@ -10,8 +10,8 @@ SCREEN_HEIGHT = 1080
 GAME_DURATION = 60000  # 60 seconds
 
 # Target settings
-INITIAL_TARGET_RADIUS = 50  # Starting radius in pixels
-MIN_TARGET_RADIUS = 20      # Minimum radius (hardest)
+INITIAL_TARGET_RADIUS = 90  # Starting radius in pixels
+MIN_TARGET_RADIUS = 60      # Minimum radius (hardest)
 INITIAL_TTL = 2000          # Starting time-to-live in ms
 MIN_TTL = 800               # Minimum TTL (hardest)
 
@@ -58,8 +58,8 @@ SETTINGS = DEFAULT_SETTINGS.copy()
 PRESETS = {
 	"easy": {
 		"game_duration": 60000,
-		"initial_target_radius": 60,
-		"min_target_radius": 30,
+		"initial_target_radius": 100,
+		"min_target_radius": 80,
 		"initial_ttl": 2500,
 		"min_ttl": 1200,
 		"difficulty_ramp_interval": 6000,
@@ -69,12 +69,12 @@ PRESETS = {
 	"medium": DEFAULT_SETTINGS.copy(),
 	"hard": {
 		"game_duration": 60000,
-		"initial_target_radius": 45,
-		"min_target_radius": 18,
+		"initial_target_radius": 80,
+		"min_target_radius": 40,
 		"initial_ttl": 1500,
 		"min_ttl": 600,
 		"difficulty_ramp_interval": 4000,
-		"ttl_decrease_amount": 120,
+		"ttl_decrease_amount": 100,
 		"radius_decrease_amount": 4,
 	},
 }

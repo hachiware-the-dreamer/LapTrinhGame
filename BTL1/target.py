@@ -6,7 +6,7 @@ import math
 class Target:
     """A circular target with concentric red and white rings"""
     
-    def __init__(self, screen_width, screen_height, radius, ttl):
+    def __init__(self, screen_width, screen_height, radius, ttl, min_y=0):
         """
         Initialize a target
         
@@ -15,13 +15,14 @@ class Target:
             screen_height: Height of the game screen
             radius: Outer radius of the target
             ttl: Time-to-live in milliseconds
+            min_y: Minimum y-coordinate for spawning (to avoid HUD area)
         """
         self.radius = radius
         self.ttl = ttl
         
-        # Random position using formula: r < x < (Width - r) and r < y < (Height - r)
+        # Random position using formula: r < x < (Width - r) and min_y + r < y < (Height - r)
         self.x = random.randint(radius, screen_width - radius)
-        self.y = random.randint(radius, screen_height - radius)
+        self.y = random.randint(max(radius, min_y + radius), screen_height - radius)
         
         # Timing
         self.spawn_time = pygame.time.get_ticks()
