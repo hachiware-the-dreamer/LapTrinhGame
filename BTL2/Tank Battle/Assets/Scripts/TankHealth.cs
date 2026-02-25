@@ -24,8 +24,14 @@ public class TankHealth : MonoBehaviour
 
     void Die()
     {
-        // Add explosion particles later
         Debug.Log(gameObject.name + " was destroyed!");
+
+        // Notify the GameManager so it can show the end screen
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnTankDestroyed(gameObject.tag);
+        }
+
         Destroy(gameObject);
     }
 }
