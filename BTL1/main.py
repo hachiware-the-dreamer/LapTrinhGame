@@ -17,6 +17,7 @@ except pygame.error:
 # Screen setup
 SCREEN_WIDTH = config.SCREEN_WIDTH
 SCREEN_HEIGHT = config.SCREEN_HEIGHT
+HUD_HEIGHT = 220
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Aim Trainer")
 clock = pygame.time.Clock()
@@ -160,7 +161,7 @@ def draw_floating_text(surface):
 def spawn_target():
     """Spawn a new target with current difficulty settings"""
     global current_target
-    current_target = Target(SCREEN_WIDTH, SCREEN_HEIGHT, current_radius, current_ttl)
+    current_target = Target(SCREEN_WIDTH, SCREEN_HEIGHT, current_radius, current_ttl, min_y=HUD_HEIGHT)
 
 
 def calculate_score(reaction_time, ttl):

@@ -1,10 +1,10 @@
-# � Aim Trainer Game
+# Aim Trainer Game
 
 A progressive difficulty aim trainer built with Pygame to test and improve your reflexes and accuracy.
 
 ---
 
-## ✨ Features
+## Features
 
 - **60-Second Sessions**: Fixed duration gameplay with progressive difficulty
 - **Reaction Time Tracking**: Measures your response time from target spawn to click
@@ -14,12 +14,12 @@ A progressive difficulty aim trainer built with Pygame to test and improve your 
 
 ---
 
-## 🕹️ How to Play
+## How to Play
 
-1. **Click "START GAME"** from the main menu
-2. **Click on targets** as quickly as possible before they disappear
-3. **Avoid missing** - both clicking empty space and letting targets expire count as misses
-4. **Complete 60 seconds** to see your results
+1. Click **START GAME** from the main menu
+2. Click on targets as quickly as possible before they disappear
+3. Avoid missing - both clicking empty space and letting targets expire count as misses
+4. Complete 60 seconds to see your results
 
 ### Controls
 
@@ -28,14 +28,14 @@ A progressive difficulty aim trainer built with Pygame to test and improve your 
 
 ---
 
-## 📊 Scoring System
+## Scoring System
 
 The scoring system rewards both accuracy and speed:
 
 ### Formula
 
-```python
-score += BASE_POINTS + REFLEX_BONUS
+```
+score = BASE_POINTS + REFLEX_BONUS
 ```
 
 Where:
@@ -49,9 +49,10 @@ Where:
 
 If a target has a TTL of 2000ms and you click it in 500ms:
 
-$$bonus = \frac{max(0, 2000 - 500)}{2000} \times 50 = 37.5$$
-
-$$score = 100 + 37.5 = 137.5 \text{ points}$$
+```
+bonus = max(0, 2000 - 500) / 2000 * 50 = 37.5
+score = 100 + 37.5 = 137.5 points
+```
 
 **Key Points:**
 - Faster clicks = higher bonus
@@ -61,7 +62,7 @@ $$score = 100 + 37.5 = 137.5 \text{ points}$$
 
 ---
 
-## 📈 Progressive Difficulty
+## Progressive Difficulty
 
 The game becomes progressively harder over time to maintain challenge:
 
@@ -73,19 +74,16 @@ The game becomes progressively harder over time to maintain challenge:
 
 ### Difficulty Bounds
 
-- **Initial Settings:**
-  - TTL: 2000ms
-  - Radius: 50px
-
-- **Minimum Settings:**
-  - TTL: 800ms
-  - Radius: 20px
+| Setting | Initial | Minimum |
+|---------|---------|---------|
+| TTL | 2000ms | 800ms |
+| Radius | 50px | 20px |
 
 This ensures the game remains challenging but not impossible.
 
 ---
 
-## 📋 Statistics Tracked
+## Statistics Tracked
 
 ### During Gameplay
 - **Time Remaining**: Countdown timer (60 seconds)
@@ -105,7 +103,7 @@ This ensures the game remains challenging but not impossible.
 
 ---
 
-## 🎨 Target Design
+## Target Design
 
 Targets are circular with concentric red and white rings:
 - **Outer ring** (100%): Red
@@ -118,7 +116,7 @@ The entire circle is clickable - you don't need to hit the center specifically.
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Game settings can be adjusted in `config.py`:
 
@@ -142,7 +140,7 @@ REFLEX_BONUS_CAP = 50
 
 ---
 
-## 💻 Requirements
+## Requirements
 
 - Python 3.7+
 - Pygame 2.0+
@@ -161,7 +159,7 @@ python main.py
 
 ---
 
-## 📁 File Structure
+## File Structure
 
 ```
 BTL1/
@@ -179,7 +177,7 @@ BTL1/
 
 ---
 
-## 💡 Tips for High Scores
+## Tips for High Scores
 
 1. **Focus on accuracy first** - misses don't give any points
 2. **Click quickly** - faster clicks = higher reflex bonus
@@ -189,15 +187,18 @@ BTL1/
 
 ---
 
-## 🎨 Asset References
+## Credits
 
-### Audio:
-* **Hit Sound:**  https://elevenlabs.io/sound-effects/pistol
-* **Miss Sound:**  https://minecraft.wiki/w/File:Player_hurt1.ogg
-* **Open Sans Font:** https://fonts.google.com/specimen/Open+Sans
-* **Crosshair:** https://www.flaticon.com/free-icon/crosshair_1545215?term=crosshair&page=1&position=10&origin=tag&related_id=1545215
+### Audio
+- **Hit Sound**: [Pistol 8 - ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects/pistol)
+- **Miss Sound**: [Minecraft Player Hurt](https://minecraft.wiki/w/File:Player_hurt1.ogg)
 
+### Fonts
+- **Open Sans**: [Google Fonts](https://fonts.google.com/specimen/Open+Sans)
+
+### Other Assets
+- **Crosshair:** [Flaticon Crosshair Image](https://www.flaticon.com/free-icon/crosshair_1545215?term=crosshair&page=1&position=10&origin=tag&related_id=1545215)
 ---
 
-**Good luck improving your aim!** 🎯
+Good luck improving your aim!
  
