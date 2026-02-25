@@ -3,12 +3,12 @@ using UnityEngine.SceneManagement;
 
 public class MainMenuController : MonoBehaviour
 {
-    public string gameSceneName = "SampleScene";
+    public string mapSelectionSceneName = "MapSelectionScene";
 
     public void PlayGame()
     {
-        Debug.Log("Loading Game...");
-        SceneManager.LoadScene(gameSceneName);
+        Debug.Log("Loading Map Selection...");
+        SceneManager.LoadScene(mapSelectionSceneName);
     }
 
     public void QuitGame()

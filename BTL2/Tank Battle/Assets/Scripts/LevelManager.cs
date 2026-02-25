@@ -3,7 +3,6 @@ using UnityEngine;
 public class LevelManager : MonoBehaviour
 {
     [Header("Map Settings")]
-    [SerializeField] TextAsset mapFile;
     [SerializeField] GameObject wallPrefab;
     [SerializeField] float tileSize = 1f;
 
@@ -11,20 +10,20 @@ public class LevelManager : MonoBehaviour
     [SerializeField] GameObject player1Prefab;
     [SerializeField] GameObject player2Prefab;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        GenerateMap();
-    }
-
-    void GenerateMap()
-    {
+        int mapNumber = PlayerPrefs.GetInt("SelectedMap", 1);
+        TextAsset mapFile = Resources.Load<TextAsset>("Maps/map" + mapNumber);
         if (mapFile == null)
         {
-            Debug.LogError("No map file assigned!");
+            Debug.LogError("Map file not found: Maps/map" + mapNumber + ". Make sure map files are inside Assets/Resources/Maps/");
             return;
         }
+        GenerateMap(mapFile);
+    }
 
+    void GenerateMap(TextAsset mapFile)
+    {
         // Splits the .txt file into rows -> removes '\r', '\n' and blank lines
         string[] rows = mapFile.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
         for (int y = 0; y < rows.Length; y++)

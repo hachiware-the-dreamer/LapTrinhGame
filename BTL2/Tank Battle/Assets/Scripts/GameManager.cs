@@ -54,6 +54,12 @@ public class GameManager : MonoBehaviour
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
+    public void ChooseMap()
+    {
+        Time.timeScale = 1f;
+        SceneManager.LoadScene("MapSelectionScene");
+    }
+
     public void GoToMainMenu()
     {
         Time.timeScale = 1f;
