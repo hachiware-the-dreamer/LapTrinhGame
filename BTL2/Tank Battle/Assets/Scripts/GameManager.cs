@@ -20,7 +20,7 @@ public class GameManager : MonoBehaviour
             winnerText = endScreenPanel.GetComponentInChildren<TextMeshProUGUI>(true);
             if (winnerText != null)
             {
-                winnerText.enableWordWrapping = false;
+                winnerText.textWrappingMode = TextWrappingModes.NoWrap;
                 winnerText.enableAutoSizing = true;
                 winnerText.fontSizeMin = 10;
                 winnerText.fontSizeMax = 72;

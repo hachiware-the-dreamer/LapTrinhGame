@@ -4,18 +4,17 @@ public class BulletPhysics : MonoBehaviour
 {
     [Header("Bullet Settings")]
     [SerializeField] float speed = 10f;
-    [SerializeField] float lifetime = 3f;
+    [SerializeField] int maxBounces = 3;
     [SerializeField] LayerMask collisionLayers;
 
     [HideInInspector] public string ownerTag;
 
     private Vector2 velocity;
+    private int bounceCount = 0;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         velocity = transform.up * speed;
-        Destroy(gameObject, lifetime); // Despawns after lifetime
     }
 
     // Update is called once per frame
@@ -41,7 +40,14 @@ public class BulletPhysics : MonoBehaviour
                 return;
             }
 
-            // Wall hit            
+            // Wall hit
+            bounceCount++;
+            if (bounceCount > maxBounces)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             Vector2 n = hit.normal;
             Vector2 vOld = velocity;
             float dotProduct = Vector2.Dot(vOld, n);
@@ -49,8 +55,7 @@ public class BulletPhysics : MonoBehaviour
 
             velocity = vNew; // Set new velocity
             transform.up = velocity.normalized; // Rotate bullet
-            // Snap the bullet to the slightly above the point where it hits the wall
-            // -> Prevents the bullet from glitching through
+            // Snap the bullet to slightly above the hit point to prevent glitching
             transform.position = hit.point + (hit.normal * 0.05f);
         }
         else

@@ -46,10 +46,10 @@ public class MapSelectionManager : MonoBehaviour
 
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = 5;
-        grid.cellSize = new Vector2(170f, 100f);
-        grid.spacing = new Vector2(16f, 16f);
-        grid.childAlignment = TextAnchor.UpperCenter;
-        grid.padding = new RectOffset(24, 24, 24, 24);
+        grid.cellSize = new Vector2(300f, 200f);
+        grid.spacing = new Vector2(20f, 20f);
+        grid.childAlignment = TextAnchor.MiddleCenter;
+        grid.padding = new RectOffset(40, 40, 40, 40);
     }
 
     void ConfigureMapButton(Button button, int mapIndex)
@@ -90,6 +90,10 @@ public class MapSelectionManager : MonoBehaviour
 
         button.onClick.RemoveAllListeners();
         button.onClick.AddListener(() => SelectMap(mapIndex));
+
+        // Hover scale effect
+        if (button.GetComponent<ButtonHoverScale>() == null)
+            button.gameObject.AddComponent<ButtonHoverScale>();
     }
 
     Sprite LoadPreviewSprite(int mapIndex)
