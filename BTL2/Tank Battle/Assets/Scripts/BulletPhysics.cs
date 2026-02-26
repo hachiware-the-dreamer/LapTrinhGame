@@ -7,6 +7,10 @@ public class BulletPhysics : MonoBehaviour
     [SerializeField] int maxBounces = 3;
     [SerializeField] LayerMask collisionLayers;
 
+    [Header("Particles")]
+    [SerializeField] GameObject bounceParticlePrefab;
+    [SerializeField] GameObject hitParticlePrefab;
+
     [HideInInspector] public string ownerTag;
 
     private Vector2 velocity;
@@ -36,6 +40,10 @@ public class BulletPhysics : MonoBehaviour
             if (enemyTank != null)
             {
                 enemyTank.TakeDamage(1);
+                if (hitParticlePrefab != null)
+                {
+                    Instantiate(hitParticlePrefab, transform.position, Quaternion.identity);
+                }
                 Destroy(gameObject);
                 return;
             }
@@ -52,6 +60,11 @@ public class BulletPhysics : MonoBehaviour
             Vector2 vOld = velocity;
             float dotProduct = Vector2.Dot(vOld, n);
             Vector2 vNew = vOld - (2f * dotProduct * n);
+
+            if (bounceParticlePrefab != null)
+            {
+                Instantiate(bounceParticlePrefab, hit.point, Quaternion.identity);
+            }
 
             velocity = vNew; // Set new velocity
             transform.up = velocity.normalized; // Rotate bullet

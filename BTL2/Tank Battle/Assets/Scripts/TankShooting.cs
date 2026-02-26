@@ -12,6 +12,9 @@ public class TankShooting : MonoBehaviour
     [SerializeField] float fireCooldown = 0.5f;
     private float lastFireTime = -10f; // -10 to allow first shot
 
+    [Header("Particles")]
+    [SerializeField] GameObject muzzleFlashPrefab;
+
     private void OnEnable() { fireAction.action.Enable(); }
     private void OnDisable() { fireAction.action.Disable(); }
 
@@ -34,6 +37,11 @@ public class TankShooting : MonoBehaviour
         Quaternion bulletRotation = firePoint.rotation * Quaternion.Euler(0, 0, 180f);
         
         GameObject newBullet = Instantiate(bulletPrefab, firePoint.position, bulletRotation);
+
+        if (muzzleFlashPrefab != null)
+        {
+            Instantiate(muzzleFlashPrefab, firePoint.position, firePoint.rotation);
+        }
 
         BulletPhysics bulletScript = newBullet.GetComponent<BulletPhysics>();
         if (bulletScript != null)

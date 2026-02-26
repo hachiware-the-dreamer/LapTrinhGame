@@ -105,7 +105,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BulletPhysics
   speed: 10
-  lifetime: 1
+  maxBounces: 3
   collisionLayers:
     serializedVersion: 2
     m_Bits: 192
+  bounceParticlePrefab: {fileID: 9041907629534949444, guid: f1fe2605d82b3324d9f5a2b9aa7c804e, type: 3}
+  hitParticlePrefab: {fileID: 6592777626772038742, guid: 9843936b33c864948963c20ec19d894d, type: 3}
+  ownerTag: 
