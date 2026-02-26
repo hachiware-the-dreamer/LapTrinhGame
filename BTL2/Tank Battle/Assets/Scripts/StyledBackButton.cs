@@ -8,60 +8,83 @@ using TMPro;
 [RequireComponent(typeof(Button))]
 public class StyledBackButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
 {
-    static readonly Color NormalColor = new Color(0.80f, 0.08f, 0.08f, 1f); // red
-    static readonly Color HoverColor  = new Color(1.00f, 0.22f, 0.22f, 1f); // bright red
-    static readonly Color PressColor  = new Color(0.50f, 0.04f, 0.04f, 1f); // dark red
+    static readonly Color NormalColor = new Color(0.85f, 0.28f, 0.28f, 1f); 
+    static readonly Color HoverColor  = new Color(0.95f, 0.35f, 0.35f, 1f); 
+    static readonly Color PressColor  = new Color(0.70f, 0.15f, 0.15f, 1f); 
 
-    const float AnimSpeed = 16f;
+    const float AnimSpeed = 15f;
 
     Image           _bg;
     TextMeshProUGUI _label;
-    Color           _target;
+    
+    Color   _targetColor;
+    Vector3 _targetScale; // Bouncy animation
 
     void Awake()
     {
-        // ── RectTransform: small, bottom-left ────────────────────────────────
         RectTransform rt = GetComponent<RectTransform>();
         rt.anchorMin        = Vector2.zero;
         rt.anchorMax        = Vector2.zero;
         rt.pivot            = Vector2.zero;
-        rt.anchoredPosition = new Vector2(24f, 24f);
-        rt.sizeDelta        = new Vector2(56f, 22f);
+        rt.anchoredPosition = new Vector2(40f, 40f);
+        rt.sizeDelta        = new Vector2(140f, 50f);
 
         // ── Image: generated rounded-rect sprite ─────────────────────────────
         _bg = GetComponent<Image>();
         if (_bg == null) _bg = gameObject.AddComponent<Image>();
-        _bg.sprite = MakeRoundedRect(128, 42, 12);
+        
+        _bg.sprite = MakeRoundedRect(128, 64, 16); 
         _bg.type   = Image.Type.Sliced;
         _bg.color  = NormalColor;
 
-        // Remove default Button transition so our colour tween is the only one
         Button btn = GetComponent<Button>();
         btn.transition = Selectable.Transition.None;
 
-        // ── Label ─────────────────────────────────────────────────────────────
         _label = GetComponentInChildren<TextMeshProUGUI>(true);
         if (_label != null)
         {
             _label.text      = "◄  BACK";
-            _label.fontSize  = 11f;
+            _label.fontSize  = 22f;
             _label.fontStyle = FontStyles.Bold;
             _label.color     = Color.white;
             _label.alignment = TextAlignmentOptions.Center;
         }
 
-        _target = NormalColor;
+        _targetColor = NormalColor;
+        _targetScale = Vector3.one;
     }
 
     void Update()
     {
-        _bg.color = Color.Lerp(_bg.color, _target, Time.unscaledDeltaTime * AnimSpeed);
+        // Smoothly lerp BOTH color and scale every frame
+        _bg.color = Color.Lerp(_bg.color, _targetColor, Time.unscaledDeltaTime * AnimSpeed);
+        transform.localScale = Vector3.Lerp(transform.localScale, _targetScale, Time.unscaledDeltaTime * AnimSpeed);
     }
 
-    public void OnPointerEnter(PointerEventData _) => _target = HoverColor;
-    public void OnPointerExit (PointerEventData _) => _target = NormalColor;
-    public void OnPointerDown (PointerEventData _) => _target = PressColor;
-    public void OnPointerUp   (PointerEventData _) => _target = HoverColor;
+    // ── Input Handling with Bounce Animation ─────────────────────────────────
+    public void OnPointerEnter(PointerEventData _) 
+    {
+        _targetColor = HoverColor;
+        _targetScale = new Vector3(1.05f, 1.05f, 1f); // Pop up slightly on hover
+    }
+    
+    public void OnPointerExit(PointerEventData _) 
+    {
+        _targetColor = NormalColor;
+        _targetScale = Vector3.one; // Return to normal
+    }
+    
+    public void OnPointerDown(PointerEventData _) 
+    {
+        _targetColor = PressColor;
+        _targetScale = new Vector3(0.95f, 0.95f, 1f); // Squish down on click
+    }
+    
+    public void OnPointerUp(PointerEventData _) 
+    {
+        _targetColor = HoverColor;
+        _targetScale = new Vector3(1.05f, 1.05f, 1f); // Bounce back up when released
+    }
 
     // ── Procedural rounded-rectangle sprite ──────────────────────────────────
     static Sprite MakeRoundedRect(int w, int h, int radius)
@@ -78,18 +101,11 @@ public class StyledBackButton : MonoBehaviour, IPointerEnterHandler, IPointerExi
         tex.Apply();
 
         int b = radius;
-        return Sprite.Create(tex,
-            new Rect(0, 0, w, h),
-            new Vector2(0.5f, 0.5f),
-            100f,
-            0,
-            SpriteMeshType.FullRect,
-            new Vector4(b, b, b, b));
+        return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
     }
 
     static bool InsideRounded(int x, int y, int w, int h, int r)
     {
-        // corners
         int[] cx = { r,     w-r-1, r,     w-r-1 };
         int[] cy = { r,     r,     h-r-1, h-r-1 };
         for (int i = 0; i < 4; i++)

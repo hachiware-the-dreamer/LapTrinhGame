@@ -72,11 +72,15 @@ public class LevelManager : MonoBehaviour
         float centerX = (mapWidth / 2f) - (tileSize / 2f);
         float centerY = -(mapHeight / 2f) + (tileSize / 2f);
 
+        float hudPadding = 4f;
+        float adjustedCenterY = centerY + (hudPadding / 2f);
+
         // Keep Z at -10 so it stays behind the 2D sprites
-        Camera.main.transform.position = new Vector3(centerX, centerY, -10f);
+        Camera.main.transform.position = new Vector3(centerX, adjustedCenterY, -10f);
         
         // Automatically adjust the camera size to fit the map width
         float screenAspect = (float)Screen.width / (float)Screen.height;
-        Camera.main.orthographicSize = (mapWidth / 2f) / screenAspect + 0.5f; // +0.5f adds a small padding
+        float baseSize = (mapWidth / 2f) / screenAspect;
+        Camera.main.orthographicSize = baseSize + 0.5f + (hudPadding / 2f); // +0.5f adds a small padding
     }
 }

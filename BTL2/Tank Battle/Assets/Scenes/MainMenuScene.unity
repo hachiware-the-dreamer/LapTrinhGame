@@ -225,7 +225,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 38a097b043025e6439e422ef20abe9f3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MainMenuController
-  gameSceneName: SampleScene
+  mapSelectionSceneName: MapSelectionScene
 --- !u!4 &742935304
 Transform:
   m_ObjectHideFlags: 0
@@ -644,7 +644,7 @@ GameObject:
   - component: {fileID: 1720399941}
   - component: {fileID: 1720399940}
   m_Layer: 5
-  m_Name: Text (TMP)
+  m_Name: Title
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -691,8 +691,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: TANK BATTLE
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: 79459efec17a4d00a321bdcc27bbc385, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b369237ade57fa445822c0ab886364c1, type: 2}
+  m_sharedMaterial: {fileID: 4109947756017811912, guid: b369237ade57fa445822c0ab886364c1, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -781,7 +781,7 @@ GameObject:
   - component: {fileID: 1913744441}
   - component: {fileID: 1913744440}
   m_Layer: 5
-  m_Name: PlayButton
+  m_Name: PlayButtonText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -830,8 +830,8 @@ MonoBehaviour:
 
 '
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b369237ade57fa445822c0ab886364c1, type: 2}
+  m_sharedMaterial: {fileID: 4109947756017811912, guid: b369237ade57fa445822c0ab886364c1, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -999,7 +999,7 @@ GameObject:
   - component: {fileID: 2072956147}
   - component: {fileID: 2072956146}
   m_Layer: 5
-  m_Name: QuitButton
+  m_Name: QuitButtonText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1048,8 +1048,8 @@ MonoBehaviour:
 
 '
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b369237ade57fa445822c0ab886364c1, type: 2}
+  m_sharedMaterial: {fileID: 4109947756017811912, guid: b369237ade57fa445822c0ab886364c1, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []

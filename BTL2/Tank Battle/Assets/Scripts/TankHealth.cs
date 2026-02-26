@@ -15,6 +15,7 @@ public class TankHealth : MonoBehaviour
     {
         currentHealth -= damageAmount;
         Debug.Log(gameObject.name + " took damage! Health: " + currentHealth);
+        UIManager.Instance.UpdateHealth(gameObject.tag, currentHealth); // Update HUD
 
         if (currentHealth <= 0)
         {

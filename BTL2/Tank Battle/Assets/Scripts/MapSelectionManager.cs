@@ -9,13 +9,15 @@ public class MapSelectionManager : MonoBehaviour
     public static int TotalMaps = 10;
 
     [Header("UI References")]
+    [SerializeField] TextMeshProUGUI headerText;
     [SerializeField] Button[] mapButtons;   // 10 buttons, assigned in Inspector
     [SerializeField] RectTransform mapGridRoot;
     [SerializeField] Button backButton;
-    [SerializeField] string gameSceneName = "SampleScene";
+    [SerializeField] string gameSceneName = "GameScene";
 
     void Start()
     {
+        ConfigureHeader();
         ConfigureGrid();
 
         int buttonCount = Mathf.Min(TotalMaps, mapButtons.Length);
@@ -25,10 +27,57 @@ public class MapSelectionManager : MonoBehaviour
             ConfigureMapButton(mapButtons[i], mapIndex);
         }
 
+        ConfigureBackButton();
+    }
+
+    void ConfigureHeader()
+    {
+        if (headerText != null)
+        {
+            headerText.text = "Map Selection";
+            headerText.fontSize = 48;
+            headerText.fontStyle = FontStyles.Bold;
+            headerText.alignment = TextAlignmentOptions.Center;
+        }
+    }
+
+    void ConfigureBackButton()
+    {
         if (backButton != null)
         {
             backButton.onClick.RemoveAllListeners();
             backButton.onClick.AddListener(BackToTitle);
+
+            // Ignore layout group
+            LayoutElement layoutElement = backButton.GetComponent<LayoutElement>();
+            if (layoutElement == null)
+                layoutElement = backButton.gameObject.AddComponent<LayoutElement>();
+            layoutElement.ignoreLayout = true;
+
+            // Position at bottom left corner
+            RectTransform rectTransform = backButton.GetComponent<RectTransform>();
+            if (rectTransform != null)
+            {
+                rectTransform.anchorMin = new Vector2(0, 0);
+                rectTransform.anchorMax = new Vector2(0, 0);
+                rectTransform.pivot = new Vector2(0, 0);
+                rectTransform.anchoredPosition = new Vector2(30, 30);
+                rectTransform.sizeDelta = new Vector2(200, 80);
+            }
+
+            TextMeshProUGUI buttonText = backButton.GetComponentInChildren<TextMeshProUGUI>();
+            if (buttonText != null)
+            {
+                buttonText.fontSize = 32;
+                buttonText.fontStyle = FontStyles.Bold;
+            }
+
+            Text legacyText = backButton.GetComponentInChildren<Text>();
+            if (legacyText != null)
+            {
+                legacyText.fontSize = 32;
+                legacyText.fontStyle = UnityEngine.FontStyle.Bold;
+            }
         }
     }
 
@@ -46,8 +95,8 @@ public class MapSelectionManager : MonoBehaviour
 
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = 5;
-        grid.cellSize = new Vector2(300f, 200f);
-        grid.spacing = new Vector2(20f, 20f);
+        grid.cellSize = new Vector2(300f, 240f);
+        grid.spacing = new Vector2(20f, 40f);
         grid.childAlignment = TextAnchor.MiddleCenter;
         grid.padding = new RectOffset(40, 40, 40, 40);
     }
@@ -56,19 +105,6 @@ public class MapSelectionManager : MonoBehaviour
     {
         if (button == null)
             return;
-
-        TextMeshProUGUI tmpLabel = button.GetComponentInChildren<TextMeshProUGUI>(true);
-        if (tmpLabel != null)
-        {
-            tmpLabel.text = "Map " + mapIndex;
-            tmpLabel.fontSize = 24;
-            tmpLabel.textWrappingMode = TextWrappingModes.NoWrap;
-            tmpLabel.alignment = TextAlignmentOptions.Bottom;
-        }
-
-        Text legacyLabel = button.GetComponentInChildren<Text>(true);
-        if (legacyLabel != null)
-            legacyLabel.text = "Map " + mapIndex;
 
         Image buttonImage = button.GetComponent<Image>();
         if (buttonImage != null)
@@ -88,6 +124,37 @@ public class MapSelectionManager : MonoBehaviour
             }
         }
 
+        TextMeshProUGUI tmpLabel = button.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (tmpLabel != null)
+        {
+            RectTransform labelRect = tmpLabel.GetComponent<RectTransform>();
+            if (labelRect != null)
+            {
+                // Position text below the image
+                labelRect.anchorMin = new Vector2(0, 0);
+                labelRect.anchorMax = new Vector2(1, 0);
+                labelRect.pivot = new Vector2(0.5f, 1);
+                labelRect.anchoredPosition = new Vector2(0, -5);
+                labelRect.sizeDelta = new Vector2(0, 30);
+            }
+            
+            tmpLabel.text = "Map " + mapIndex;
+            tmpLabel.fontSize = 28;
+            tmpLabel.fontStyle = FontStyles.Bold;
+            tmpLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            tmpLabel.alignment = TextAlignmentOptions.Center;
+            tmpLabel.color = Color.black;
+        }
+
+        Text legacyLabel = button.GetComponentInChildren<Text>(true);
+        if (legacyLabel != null)
+        {
+            legacyLabel.text = "Map " + mapIndex;
+            legacyLabel.fontStyle = UnityEngine.FontStyle.Bold;
+            legacyLabel.alignment = TextAnchor.UpperCenter;
+            legacyLabel.color = Color.black;
+        }
+
         button.onClick.RemoveAllListeners();
         button.onClick.AddListener(() => SelectMap(mapIndex));
 
@@ -98,13 +165,14 @@ public class MapSelectionManager : MonoBehaviour
 
     Sprite LoadPreviewSprite(int mapIndex)
     {
-        Sprite previewSprite = Resources.Load<Sprite>("MapPreviews/map" + mapIndex);
-        if (previewSprite != null)
-            return previewSprite;
-
+        // Always generate from map file to ensure colors are up to date
         TextAsset mapFile = Resources.Load<TextAsset>("Maps/map" + mapIndex);
         if (mapFile == null)
-            return null;
+        {
+            // Fallback to pre-made preview if map file doesn't exist
+            Sprite previewSprite = Resources.Load<Sprite>("MapPreviews/map" + mapIndex);
+            return previewSprite;
+        }
 
         Texture2D generatedTexture = GenerateMapTexture(mapFile, 256, 256);
         if (generatedTexture == null)
@@ -141,48 +209,43 @@ public class MapSelectionManager : MonoBehaviour
             for (int col = 0; col < line.Length; col++)
             {
                 char tile = line[col];
-                Color drawColor;
-                bool shouldDraw = true;
-
-                switch (tile)
+                if (tile == 'W')
                 {
-                    case 'W':
-                        drawColor = wallColor;
-                        break;
-                    case '1':
-                    case 'P':
-                        drawColor = player1Color;
-                        break;
-                    case '2':
-                        drawColor = player2Color;
-                        break;
-                    default:
-                        drawColor = bgColor;
-                        shouldDraw = false;
-                        break;
+                    DrawRect(texture, col * cellWidth, (mapHeight - row - 1) * cellHeight, cellWidth, cellHeight, wallColor, width, height);
                 }
-
-                if (!shouldDraw)
-                    continue;
-
-                int startX = Mathf.RoundToInt(col * cellWidth);
-                int endX = Mathf.RoundToInt((col + 1) * cellWidth);
-                int startY = Mathf.RoundToInt((mapHeight - row - 1) * cellHeight);
-                int endY = Mathf.RoundToInt((mapHeight - row) * cellHeight);
-
-                for (int y = startY; y < endY; y++)
+                else if (tile == '1') // Found Player 1
                 {
-                    for (int x = startX; x < endX; x++)
-                    {
-                        if (x >= 0 && x < width && y >= 0 && y < height)
-                            texture.SetPixel(x, y, drawColor);
-                    }
+                    DrawRect(texture, (col - 1) * cellWidth, (mapHeight - row - 1) * cellHeight, cellWidth * 2f, cellHeight, player1Color, width, height);
+                }
+                else if (tile == '2') // Found Player 2
+                {
+                    DrawRect(texture, (col - 1) * cellWidth, (mapHeight - row - 1) * cellHeight, cellWidth * 2f, cellHeight, player2Color, width, height);
                 }
             }
         }
 
         texture.Apply();
         return texture;
+    }
+
+    // --- HELPER METHOD ---
+    void DrawRect(Texture2D tex, float startX, float startY, float w, float h, Color color, int maxWidth, int maxHeight)
+    {
+        int xMin = Mathf.RoundToInt(startX);
+        int yMin = Mathf.RoundToInt(startY);
+        int xMax = Mathf.RoundToInt(startX + w);
+        int yMax = Mathf.RoundToInt(startY + h);
+
+        for (int y = yMin; y < yMax; y++)
+        {
+            for (int x = xMin; x < xMax; x++)
+            {
+                if (x >= 0 && x < maxWidth && y >= 0 && y < maxHeight)
+                {
+                    tex.SetPixel(x, y, color);
+                }
+            }
+        }
     }
 
     public void SelectMap(int mapNumber)

@@ -7,8 +7,8 @@ public class GameManager : MonoBehaviour
     public static GameManager Instance;
 
     [Header("End Screen UI")]
-    [SerializeField] GameObject endScreenPanel;   // Assign a UI panel (disabled by default)
-    private TextMeshProUGUI winnerText;           // Auto-found from endScreenPanel children
+    [SerializeField] GameObject endScreenPanel;
+    private TextMeshProUGUI winnerText;
 
     void Awake()
     {
@@ -30,13 +30,23 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    /// <summary>
+    // --- ADD THIS TO HIDE THE MENU WHEN THE GAME STARTS ---
+    void Start()
+    {
+        if (endScreenPanel != null)
+        {
+            endScreenPanel.SetActive(false);
+        }
+        
+        // Ensure the game runs at normal speed 
+        Time.timeScale = 1f; 
+    }
+
     /// Called by TankHealth when a tank is destroyed.
-    /// </summary>
     public void OnTankDestroyed(string destroyedTag)
     {
         // The winner is the OTHER player
-        string winner = (destroyedTag == "Player1") ? "Player 2 Win!" : "Player 1 Win!";
+        string winner = (destroyedTag == "Player1") ? "Xanh SM Wins!" : "Shopee Wins!";
 
         if (winnerText != null)
             winnerText.text = winner;
