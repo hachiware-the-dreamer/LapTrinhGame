@@ -8,7 +8,9 @@ public class TankHealth : MonoBehaviour
 
     [Header("Particles")]
     [SerializeField] GameObject deathExplosionPrefab;
+
     private int currentHealth;
+    private bool isDead = false;
 
     void Start()
     {
@@ -17,9 +19,15 @@ public class TankHealth : MonoBehaviour
 
     public void TakeDamage(int damageAmount)
     {
+        if (isDead) return;
+
         currentHealth -= damageAmount;
         Debug.Log(gameObject.name + " took damage! Health: " + currentHealth);
-        UIManager.Instance.UpdateHealth(gameObject.tag, currentHealth); // Update HUD
+
+        if (UIManager.Instance != null)
+        {
+            UIManager.Instance.UpdateHealth(gameObject.tag, currentHealth);
+        }
 
         if (currentHealth <= 0)
         {
@@ -29,7 +37,16 @@ public class TankHealth : MonoBehaviour
 
     IEnumerator DeathRoutine()
     {
+        if (isDead) yield break;
+        isDead = true;
+
         Debug.Log(gameObject.name + " was destroyed!");
+
+        // Play explosion sound once
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayExplode();
+        }
 
         if (deathExplosionPrefab != null)
         {
@@ -38,30 +55,34 @@ public class TankHealth : MonoBehaviour
 
         // Hide all child sprites
         SpriteRenderer[] sprites = GetComponentsInChildren<SpriteRenderer>();
-        foreach(SpriteRenderer sr in sprites)
+        foreach (SpriteRenderer sr in sprites)
         {
             sr.enabled = false;
         }
 
-        // Turn off the trails
+        // Turn off trails
         TrailRenderer[] trails = GetComponentsInChildren<TrailRenderer>();
-        foreach(TrailRenderer tr in trails)
+        foreach (TrailRenderer tr in trails)
         {
-            tr.emitting = false; 
+            tr.emitting = false;
         }
 
-        // Disable collision and scripts
-        GetComponent<BoxCollider2D>().enabled = false;
-        GetComponent<TankMovement>().enabled = false;
-        GetComponent<TankShooting>().enabled = false;
+        // Disable collision and scripts safely
+        BoxCollider2D col = GetComponent<BoxCollider2D>();
+        if (col != null) col.enabled = false;
 
-        // Tell the GameManager to show the UI
+        TankMovement movement = GetComponent<TankMovement>();
+        if (movement != null) movement.enabled = false;
+
+        TankShooting shooting = GetComponent<TankShooting>();
+        if (shooting != null) shooting.enabled = false;
+
+        // Notify GameManager
         if (GameManager.Instance != null)
         {
             GameManager.Instance.OnTankDestroyed(gameObject.tag);
         }
 
-        // Wait for explosion
         yield return new WaitForSecondsRealtime(1f);
         Destroy(gameObject);
     }

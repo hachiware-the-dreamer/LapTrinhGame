@@ -34,6 +34,13 @@ public class TankShooting : MonoBehaviour
     void Shoot()
     {
         lastFireTime = Time.time; // Reset the cooldown timer
+        
+        // Play shooting sound
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayFire();
+        }
+        
         Quaternion bulletRotation = firePoint.rotation * Quaternion.Euler(0, 0, 180f);
         
         GameObject newBullet = Instantiate(bulletPrefab, firePoint.position, bulletRotation);

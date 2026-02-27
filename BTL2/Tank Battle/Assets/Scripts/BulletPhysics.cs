@@ -48,14 +48,17 @@ public class BulletPhysics : MonoBehaviour
                 return;
             }
 
-            // Wall hit
+            // Wall hit          
             bounceCount++;
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.PlayBounce();
             if (bounceCount > maxBounces)
             {
                 Destroy(gameObject);
                 return;
+            }  
             }
-
             Vector2 n = hit.normal;
             Vector2 vOld = velocity;
             float dotProduct = Vector2.Dot(vOld, n);

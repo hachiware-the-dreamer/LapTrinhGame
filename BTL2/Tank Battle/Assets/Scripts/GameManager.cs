@@ -14,6 +14,12 @@ public class GameManager : MonoBehaviour
     {
         Instance = this;
 
+        // Play game background music
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayGameMusic();
+        }
+
         // Auto-find the TMP text inside the end screen panel
         if (endScreenPanel != null)
         {
@@ -47,6 +53,12 @@ public class GameManager : MonoBehaviour
     {
         // The winner is the OTHER player
         string winner = (destroyedTag == "Player1") ? "Xanh SM Wins!" : "Shopee Wins!";
+
+        // Play end music
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayEndMusic();
+        }
 
         if (winnerText != null)
             winnerText.text = winner;

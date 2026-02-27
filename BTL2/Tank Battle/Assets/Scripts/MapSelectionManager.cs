@@ -250,6 +250,12 @@ public class MapSelectionManager : MonoBehaviour
 
     public void SelectMap(int mapNumber)
     {
+        // Play click sound
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayClick();
+        }
+        
         PlayerPrefs.SetInt("SelectedMap", mapNumber);
         PlayerPrefs.Save();
         SceneManager.LoadScene(gameSceneName);
@@ -257,6 +263,12 @@ public class MapSelectionManager : MonoBehaviour
 
     public void BackToTitle()
     {
+        // Play click sound
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayClick();
+        }
+        
         SceneManager.LoadScene("MainMenuScene");
     }
 }

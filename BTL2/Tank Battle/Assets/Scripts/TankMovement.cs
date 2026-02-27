@@ -14,17 +14,55 @@ public class TankMovement : MonoBehaviour
     [SerializeField] BoxCollider2D tankCollider;
     [SerializeField] LayerMask wallLayerMask;
 
+    [Header("Audio")]
+    [SerializeField] AudioSource engineAudioSource;
+
     private Vector2 currentInput;
     private float currentAngle = 0f;
+    private bool isMoving = false;
 
     // Must manually enable the move action when using references
     private void OnEnable() { moveAction.action.Enable(); }
     private void OnDisable() { moveAction.action.Disable(); }
 
+    void Start()
+    {
+        // Setup engine audio if AudioManager exists
+        if (engineAudioSource == null)
+        {
+            engineAudioSource = gameObject.AddComponent<AudioSource>();
+            engineAudioSource.loop = true;
+            engineAudioSource.playOnAwake = false;
+            if (AudioManager.Instance != null)
+            {
+                engineAudioSource.clip = AudioManager.Instance.moveSound;
+            }
+        }
+    }
+
     // Update is called once per frame
     void Update()
     {
         currentInput = moveAction.action.ReadValue<Vector2>();
+
+        // Handle engine sound
+        bool shouldMove = currentInput.magnitude > 0.1f;
+        if (shouldMove && !isMoving)
+        {
+            isMoving = true;
+            if (engineAudioSource != null && engineAudioSource.clip != null && !engineAudioSource.isPlaying)
+            {
+                engineAudioSource.Play();
+            }
+        }
+        else if (!shouldMove && isMoving)
+        {
+            isMoving = false;
+            if (engineAudioSource != null)
+            {
+                engineAudioSource.Stop();
+            }
+        }
 
         // Rotation
         if (currentInput.x != 0)
