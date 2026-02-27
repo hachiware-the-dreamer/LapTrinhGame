@@ -2316,10 +2316,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: New Text
+  m_text: <color=#3388FF>TANK</color> <color=#FF3333>BATTLE</color>
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: b369237ade57fa445822c0ab886364c1, type: 2}
-  m_sharedMaterial: {fileID: 4109947756017811912, guid: b369237ade57fa445822c0ab886364c1, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 8e9572ac8d8cb06478e2d7156e528cee, type: 2}
+  m_sharedMaterial: {fileID: 6883881653028072754, guid: 8e9572ac8d8cb06478e2d7156e528cee, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -2343,8 +2343,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 50
+  m_fontSizeBase: 50
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18

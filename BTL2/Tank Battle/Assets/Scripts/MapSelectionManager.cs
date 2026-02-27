@@ -34,8 +34,8 @@ public class MapSelectionManager : MonoBehaviour
     {
         if (headerText != null)
         {
-            headerText.text = "Map Selection";
-            headerText.fontSize = 48;
+            headerText.text = "<color=#3388FF>MAP</color> <color=#FF3333>SELECTION</color>";
+            headerText.fontSize = 80;
             headerText.fontStyle = FontStyles.Bold;
             headerText.alignment = TextAlignmentOptions.Center;
         }
