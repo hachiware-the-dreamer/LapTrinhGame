@@ -53,12 +53,13 @@ public class BulletPhysics : MonoBehaviour
             if (AudioManager.Instance != null)
             {
                 AudioManager.Instance.PlayBounce();
-                if (bounceCount > maxBounces)
-                {
-                    Destroy(gameObject);
-                    return;
-                }  
             }
+            if (bounceCount > maxBounces)
+            {
+                Destroy(gameObject);
+                return;
+            }  
+
             Vector2 n = hit.normal;
             Vector2 vOld = velocity;
             float dotProduct = Vector2.Dot(vOld, n);
