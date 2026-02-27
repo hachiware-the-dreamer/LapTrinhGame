@@ -14,6 +14,7 @@ public class AudioManager : MonoBehaviour
     public AudioClip bounceSound;
     public AudioClip explodeSound;
     public AudioClip moveSound;
+    public AudioClip hurtSound;
 
     [Header("Background Music")]
     public AudioClip introMusic;   // Main menu music
@@ -74,6 +75,11 @@ public class AudioManager : MonoBehaviour
     public void PlayMove()
     {
         PlaySound(moveSound);
+    }
+
+    public void PlayHurt()
+    {
+        PlaySound(hurtSound);
     }
 
     public void PlaySound(AudioClip clip)

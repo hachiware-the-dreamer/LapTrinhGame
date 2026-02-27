@@ -24,6 +24,12 @@ public class TankHealth : MonoBehaviour
         currentHealth -= damageAmount;
         Debug.Log(gameObject.name + " took damage! Health: " + currentHealth);
 
+        // Play hurt sound when taking damage
+        if (AudioManager.Instance != null && currentHealth > 0)
+        {
+            AudioManager.Instance.PlayHurt();
+        }
+
         if (UIManager.Instance != null)
         {
             UIManager.Instance.UpdateHealth(gameObject.tag, currentHealth);
