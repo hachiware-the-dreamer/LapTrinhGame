@@ -26,6 +26,9 @@ public class LevelManager : MonoBehaviour
     {
         // Splits the .txt file into rows -> removes '\r', '\n' and blank lines
         string[] rows = mapFile.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
+        float mapHeight = rows.Length;
+        float mapWidth = rows.Length > 0 ? rows[0].Length : 0;
+
         for (int y = 0; y < rows.Length; y++)
         {
             string currentRow = rows[y];
@@ -37,7 +40,16 @@ public class LevelManager : MonoBehaviour
                 if (tile == 'W') // Wall
                 {
                     // Have transform -> all walls are child of level manager
-                    Instantiate(wallPrefab, spawnPos, Quaternion.identity, transform);
+                    GameObject wall = Instantiate(wallPrefab, spawnPos, Quaternion.identity, transform);
+
+                    // Check if this is a border wall (first/last row or column)
+                    bool isBorder = (x == 0 || x == currentRow.Length - 1 || y == 0 || y == mapHeight - 1);
+
+                    if (!isBorder)
+                    {
+                        // Add destructible component to inner walls
+                        wall.AddComponent<WallHealth>();
+                    }
                 }
                 else if (tile == 'P') // Player
                 {
@@ -65,8 +77,8 @@ public class LevelManager : MonoBehaviour
         }
 
         // Camera auto-focus
-        float mapWidth = rows[0].Length * tileSize;
-        float mapHeight = rows.Length * tileSize;
+        // float mapWidth = rows[0].Length * tileSize;
+        // float mapHeight = rows.Length * tileSize;
 
         // Account for center of tile
         float centerX = (mapWidth / 2f) - (tileSize / 2f);

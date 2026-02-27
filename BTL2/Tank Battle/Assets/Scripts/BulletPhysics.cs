@@ -48,7 +48,14 @@ public class BulletPhysics : MonoBehaviour
                 return;
             }
 
-            // Wall hit          
+            // Wall hit
+            // Check if wall is destructible
+            WallHealth wallHealth = hit.collider.GetComponent<WallHealth>();
+            if (wallHealth != null)
+            {
+                wallHealth.TakeDamage(1);
+            }
+
             bounceCount++;
             if (AudioManager.Instance != null)
             {
