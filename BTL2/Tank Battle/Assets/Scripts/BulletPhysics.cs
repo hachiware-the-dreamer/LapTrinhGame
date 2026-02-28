@@ -12,6 +12,7 @@ public class BulletPhysics : MonoBehaviour
     [SerializeField] GameObject hitParticlePrefab;
 
     [HideInInspector] public string ownerTag;
+    [HideInInspector] public int damage = 1;
 
     private Vector2 velocity;
     private int bounceCount = 0;
@@ -39,7 +40,7 @@ public class BulletPhysics : MonoBehaviour
             TankHealth enemyTank = hit.collider.GetComponent<TankHealth>();
             if (enemyTank != null)
             {
-                enemyTank.TakeDamage(1);
+                enemyTank.TakeDamage(damage);
                 if (hitParticlePrefab != null)
                 {
                     Instantiate(hitParticlePrefab, transform.position, Quaternion.identity);

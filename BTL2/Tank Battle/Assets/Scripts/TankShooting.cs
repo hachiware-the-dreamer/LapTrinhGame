@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections;
 
 public class TankShooting : MonoBehaviour
 {
@@ -14,6 +15,10 @@ public class TankShooting : MonoBehaviour
 
     [Header("Particles")]
     [SerializeField] GameObject muzzleFlashPrefab;
+
+    // Power-up state
+    private int damageBonus = 0;
+    private Coroutine damageBoostCoroutine;
 
     private void OnEnable() { fireAction.action.Enable(); }
     private void OnDisable() { fireAction.action.Disable(); }
@@ -54,6 +59,28 @@ public class TankShooting : MonoBehaviour
         if (bulletScript != null)
         {
             bulletScript.ownerTag = gameObject.tag; // Passes "Player1" or "Player2"
+            bulletScript.damage = 1 + damageBonus; // Base damage + power-up bonus
         }
+    }
+
+    /// <summary>
+    /// Called by PowerUp to temporarily increase bullet damage.
+    /// </summary>
+    public void ApplyDamageBoost(int bonus, float duration)
+    {
+        if (damageBoostCoroutine != null)
+            StopCoroutine(damageBoostCoroutine);
+
+        damageBoostCoroutine = StartCoroutine(DamageBoostRoutine(bonus, duration));
+    }
+
+    IEnumerator DamageBoostRoutine(int bonus, float duration)
+    {
+        damageBonus = bonus;
+        Debug.Log(gameObject.name + " damage boosted +" + bonus + " for " + duration + "s");
+        yield return new WaitForSeconds(duration);
+        damageBonus = 0;
+        Debug.Log(gameObject.name + " damage boost ended");
+        damageBoostCoroutine = null;
     }
 }

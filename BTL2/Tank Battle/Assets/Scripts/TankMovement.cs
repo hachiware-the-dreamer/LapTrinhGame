@@ -1,11 +1,16 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System.Collections;
 
 public class TankMovement : MonoBehaviour
 {
     [Header("Movement Settings")]
     [SerializeField] float moveSpeed = 5f;
     [SerializeField] float rotationSpeed = 180f;
+
+    // Power-up state
+    private float speedMultiplier = 1f;
+    private Coroutine speedBoostCoroutine;
 
     [Header("Input Setup")]
     [SerializeField] InputActionReference moveAction; // for local multiplayer
@@ -77,9 +82,10 @@ public class TankMovement : MonoBehaviour
         {
             // Apply a +270 degree offset because the sprite naturally faces down
             float angleInRadians = (currentAngle + 270f) * Mathf.Deg2Rad;
-            // Move formulas
-            float velocityX = moveSpeed * Mathf.Cos(angleInRadians);
-            float velocityY = moveSpeed * Mathf.Sin(angleInRadians);
+            // Move formulas (with power-up multiplier)
+            float currentSpeed = moveSpeed * speedMultiplier;
+            float velocityX = currentSpeed * Mathf.Cos(angleInRadians);
+            float velocityY = currentSpeed * Mathf.Sin(angleInRadians);
 
             Vector3 movement = new Vector3(velocityX, velocityY, 0f) * currentInput.y * Time.deltaTime;
             Vector3 finalPosition = transform.position;
@@ -108,5 +114,26 @@ public class TankMovement : MonoBehaviour
             
             transform.position = finalPosition;
         }
+    }
+
+    /// <summary>
+    /// Called by PowerUp to temporarily increase move speed.
+    /// </summary>
+    public void ApplySpeedBoost(float multiplier, float duration)
+    {
+        if (speedBoostCoroutine != null)
+            StopCoroutine(speedBoostCoroutine);
+
+        speedBoostCoroutine = StartCoroutine(SpeedBoostRoutine(multiplier, duration));
+    }
+
+    IEnumerator SpeedBoostRoutine(float multiplier, float duration)
+    {
+        speedMultiplier = multiplier;
+        Debug.Log(gameObject.name + " speed boosted x" + multiplier + " for " + duration + "s");
+        yield return new WaitForSeconds(duration);
+        speedMultiplier = 1f;
+        Debug.Log(gameObject.name + " speed boost ended");
+        speedBoostCoroutine = null;
     }
 }

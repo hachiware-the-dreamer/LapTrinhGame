@@ -1,0 +1,128 @@
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+
+public class PowerUpSpawner : MonoBehaviour
+{
+    [Header("Power-Up Prefabs")]
+    [SerializeField] GameObject speedBoostPrefab;   // Wind-like power-up
+    [SerializeField] GameObject damageBoostPrefab;   // Bullet-like power-up
+
+    [Header("Spawn Settings")]
+    [SerializeField] float spawnInterval = 5f;       // Seconds between spawns
+    [SerializeField] float firstSpawnDelay = 2f;     // Delay before the first spawn
+    [SerializeField] int maxPowerUpsOnMap = 5;       // Limit active power-ups
+    [SerializeField] int initialSpawnCount = 3;      // How many to spawn at the start
+    [SerializeField] float tileSize = 1f;
+    [SerializeField] float powerUpScale = 0.5f;      // Scale to match tile/tank size
+
+    private List<Vector2> emptyTiles = new List<Vector2>();
+    private int activePowerUps = 0;
+
+    void Start()
+    {
+        FindEmptyTiles();
+        StartCoroutine(SpawnLoop());
+    }
+
+    /// <summary>
+    /// Reads the same map the LevelManager used to find all empty '.' tiles.
+    /// </summary>
+    void FindEmptyTiles()
+    {
+        int mapNumber = PlayerPrefs.GetInt("SelectedMap", 1);
+        TextAsset mapFile = Resources.Load<TextAsset>("Maps/map" + mapNumber);
+        if (mapFile == null)
+        {
+            Debug.LogError("PowerUpSpawner: Map file not found!");
+            return;
+        }
+
+        string[] rows = mapFile.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
+        for (int y = 0; y < rows.Length; y++)
+        {
+            string currentRow = rows[y];
+            for (int x = 0; x < currentRow.Length; x++)
+            {
+                if (currentRow[x] == '.')
+                {
+                    // Same coordinate system as LevelManager
+                    emptyTiles.Add(new Vector2(x * tileSize, -y * tileSize));
+                }
+            }
+        }
+
+        Debug.Log("PowerUpSpawner: Found " + emptyTiles.Count + " empty tiles for spawning.");
+    }
+
+    IEnumerator SpawnLoop()
+    {
+        yield return new WaitForSeconds(firstSpawnDelay);
+
+        // Spawn multiple power-ups at the start to populate the map
+        for (int i = 0; i < initialSpawnCount && activePowerUps < maxPowerUpsOnMap; i++)
+        {
+            SpawnRandomPowerUp();
+        }
+
+        while (true)
+        {
+            yield return new WaitForSeconds(spawnInterval);
+
+            if (activePowerUps < maxPowerUpsOnMap && emptyTiles.Count > 0)
+            {
+                SpawnRandomPowerUp();
+            }
+        }
+    }
+
+    void SpawnRandomPowerUp()
+    {
+        // Pick a random empty tile
+        Vector2 spawnPos = emptyTiles[Random.Range(0, emptyTiles.Count)];
+
+        // Pick a random power-up type
+        GameObject prefab = Random.value > 0.5f ? speedBoostPrefab : damageBoostPrefab;
+
+        if (prefab == null)
+        {
+            Debug.LogWarning("PowerUpSpawner: A power-up prefab is not assigned!");
+            return;
+        }
+
+        GameObject powerUp = Instantiate(prefab, spawnPos, Quaternion.identity);
+        
+        // Scale down to match tile/tank size
+        powerUp.transform.localScale = new Vector3(powerUpScale, powerUpScale, 1f);
+        
+        activePowerUps++;
+
+        // Track when it gets picked up or destroyed
+        PowerUpTracker tracker = powerUp.AddComponent<PowerUpTracker>();
+        tracker.spawner = this;
+    }
+
+    /// <summary>
+    /// Called by PowerUpTracker when a power-up is destroyed (picked up or expired).
+    /// </summary>
+    public void OnPowerUpDestroyed()
+    {
+        activePowerUps = Mathf.Max(0, activePowerUps - 1);
+    }
+}
+
+/// <summary>
+/// Helper component that notifies the spawner when a power-up is removed from the map.
+/// </summary>
+public class PowerUpTracker : MonoBehaviour
+{
+    [HideInInspector] public PowerUpSpawner spawner;
+
+    void OnDestroy()
+    {
+        if (spawner != null)
+        {
+            spawner.OnPowerUpDestroyed();
+        }
+    }
+}
