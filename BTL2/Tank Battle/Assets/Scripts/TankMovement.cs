@@ -12,6 +12,10 @@ public class TankMovement : MonoBehaviour
     private float speedMultiplier = 1f;
     private Coroutine speedBoostCoroutine;
 
+    [Header("Speed Boost Visual")]
+    [SerializeField] GameObject speedBoostVisualPrefab;  // Trail or glow effect
+    private GameObject activeSpeedVisual;
+
     [Header("Input Setup")]
     [SerializeField] InputActionReference moveAction; // for local multiplayer
 
@@ -131,9 +135,26 @@ public class TankMovement : MonoBehaviour
     {
         speedMultiplier = multiplier;
         Debug.Log(gameObject.name + " speed boosted x" + multiplier + " for " + duration + "s");
+
+        // Show speed boost visual
+        if (speedBoostVisualPrefab != null && activeSpeedVisual == null)
+        {
+            activeSpeedVisual = Instantiate(speedBoostVisualPrefab, transform);
+            activeSpeedVisual.transform.localPosition = Vector3.zero;
+        }
+
         yield return new WaitForSeconds(duration);
+
         speedMultiplier = 1f;
         Debug.Log(gameObject.name + " speed boost ended");
+
+        // Remove speed boost visual
+        if (activeSpeedVisual != null)
+        {
+            Destroy(activeSpeedVisual);
+            activeSpeedVisual = null;
+        }
+
         speedBoostCoroutine = null;
     }
 }

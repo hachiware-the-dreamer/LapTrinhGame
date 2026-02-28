@@ -5,7 +5,8 @@ public enum PowerUpType
 {
     SpeedBoost,
     TripleShot,
-    Shield
+    Shield,
+    HealthBoost
 }
 
 public class PowerUp : MonoBehaviour
@@ -62,6 +63,7 @@ public class PowerUp : MonoBehaviour
             case PowerUpType.SpeedBoost: return "SPEED UP";
             case PowerUpType.TripleShot: return "TRIPLE SHOT";
             case PowerUpType.Shield:     return "SHIELD";
+            case PowerUpType.HealthBoost: return "+1 HP";
             default: return "POWER UP";
         }
     }
@@ -91,6 +93,14 @@ public class PowerUp : MonoBehaviour
                 if (health != null)
                 {
                     health.ApplyShield(duration);
+                }
+                break;
+
+            case PowerUpType.HealthBoost:
+                TankHealth tankHP = tank.GetComponent<TankHealth>();
+                if (tankHP != null)
+                {
+                    tankHP.Heal(1);
                 }
                 break;
         }
