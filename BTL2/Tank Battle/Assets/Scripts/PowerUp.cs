@@ -4,7 +4,8 @@ using System.Collections;
 public enum PowerUpType
 {
     SpeedBoost,
-    DamageBoost
+    TripleShot,
+    Shield
 }
 
 public class PowerUp : MonoBehaviour
@@ -13,7 +14,6 @@ public class PowerUp : MonoBehaviour
     public PowerUpType type;
     [SerializeField] float duration = 5f;
     [SerializeField] float speedMultiplier = 1.5f;  // Used for SpeedBoost
-    [SerializeField] int damageBonus = 1;            // Used for DamageBoost
     [SerializeField] float bobSpeed = 2f;
     [SerializeField] float bobHeight = 0.15f;
 
@@ -42,7 +42,7 @@ public class PowerUp : MonoBehaviour
         // Show power-up notification on HUD
         if (UIManager.Instance != null)
         {
-            string powerUpName = (type == PowerUpType.SpeedBoost) ? "SPEED UP" : "DAMAGE UP";
+            string powerUpName = GetPowerUpDisplayName();
             UIManager.Instance.ShowPowerUp(other.gameObject.tag, powerUpName, duration);
         }
 
@@ -53,6 +53,17 @@ public class PowerUp : MonoBehaviour
         }
 
         Destroy(gameObject);
+    }
+
+    string GetPowerUpDisplayName()
+    {
+        switch (type)
+        {
+            case PowerUpType.SpeedBoost: return "SPEED UP";
+            case PowerUpType.TripleShot: return "TRIPLE SHOT";
+            case PowerUpType.Shield:     return "SHIELD";
+            default: return "POWER UP";
+        }
     }
 
     void ApplyEffect(GameObject tank)
@@ -67,11 +78,19 @@ public class PowerUp : MonoBehaviour
                 }
                 break;
 
-            case PowerUpType.DamageBoost:
+            case PowerUpType.TripleShot:
                 TankShooting shooting = tank.GetComponent<TankShooting>();
                 if (shooting != null)
                 {
-                    shooting.ApplyDamageBoost(damageBonus, duration);
+                    shooting.ApplyTripleShot(duration);
+                }
+                break;
+
+            case PowerUpType.Shield:
+                TankHealth health = tank.GetComponent<TankHealth>();
+                if (health != null)
+                {
+                    health.ApplyShield(duration);
                 }
                 break;
         }

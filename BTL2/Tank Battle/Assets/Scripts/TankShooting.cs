@@ -17,8 +17,8 @@ public class TankShooting : MonoBehaviour
     [SerializeField] GameObject muzzleFlashPrefab;
 
     // Power-up state
-    private int damageBonus = 0;
-    private Coroutine damageBoostCoroutine;
+    private bool tripleShot = false;
+    private Coroutine tripleShotCoroutine;
 
     private void OnEnable() { fireAction.action.Enable(); }
     private void OnDisable() { fireAction.action.Disable(); }
@@ -46,41 +46,51 @@ public class TankShooting : MonoBehaviour
             AudioManager.Instance.PlayFire();
         }
         
-        Quaternion bulletRotation = firePoint.rotation * Quaternion.Euler(0, 0, 180f);
-        
-        GameObject newBullet = Instantiate(bulletPrefab, firePoint.position, bulletRotation);
+        // Fire the main bullet (center)
+        FireBullet(firePoint.position, firePoint.rotation * Quaternion.Euler(0, 0, 180f));
+
+        // Triple shot: fire two extra bullets at an angle
+        if (tripleShot)
+        {
+            float spreadAngle = 15f;
+            FireBullet(firePoint.position, firePoint.rotation * Quaternion.Euler(0, 0, 180f + spreadAngle));
+            FireBullet(firePoint.position, firePoint.rotation * Quaternion.Euler(0, 0, 180f - spreadAngle));
+        }
 
         if (muzzleFlashPrefab != null)
         {
             Instantiate(muzzleFlashPrefab, firePoint.position, firePoint.rotation);
         }
+    }
 
+    void FireBullet(Vector3 position, Quaternion rotation)
+    {
+        GameObject newBullet = Instantiate(bulletPrefab, position, rotation);
         BulletPhysics bulletScript = newBullet.GetComponent<BulletPhysics>();
         if (bulletScript != null)
         {
-            bulletScript.ownerTag = gameObject.tag; // Passes "Player1" or "Player2"
-            bulletScript.damage = 1 + damageBonus; // Base damage + power-up bonus
+            bulletScript.ownerTag = gameObject.tag;
         }
     }
 
     /// <summary>
-    /// Called by PowerUp to temporarily increase bullet damage.
+    /// Called by PowerUp to temporarily enable triple shot.
     /// </summary>
-    public void ApplyDamageBoost(int bonus, float duration)
+    public void ApplyTripleShot(float duration)
     {
-        if (damageBoostCoroutine != null)
-            StopCoroutine(damageBoostCoroutine);
+        if (tripleShotCoroutine != null)
+            StopCoroutine(tripleShotCoroutine);
 
-        damageBoostCoroutine = StartCoroutine(DamageBoostRoutine(bonus, duration));
+        tripleShotCoroutine = StartCoroutine(TripleShotRoutine(duration));
     }
 
-    IEnumerator DamageBoostRoutine(int bonus, float duration)
+    IEnumerator TripleShotRoutine(float duration)
     {
-        damageBonus = bonus;
-        Debug.Log(gameObject.name + " damage boosted +" + bonus + " for " + duration + "s");
+        tripleShot = true;
+        Debug.Log(gameObject.name + " triple shot active for " + duration + "s");
         yield return new WaitForSeconds(duration);
-        damageBonus = 0;
-        Debug.Log(gameObject.name + " damage boost ended");
-        damageBoostCoroutine = null;
+        tripleShot = false;
+        Debug.Log(gameObject.name + " triple shot ended");
+        tripleShotCoroutine = null;
     }
 }

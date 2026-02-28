@@ -11,6 +11,12 @@ public class TankHealth : MonoBehaviour
 
     private int currentHealth;
     private bool isDead = false;
+    private bool isShielded = false;
+    private Coroutine shieldCoroutine;
+
+    [Header("Shield Visual")]
+    [SerializeField] GameObject shieldVisualPrefab;  // Optional: a circle/bubble sprite around the tank
+    private GameObject activeShieldVisual;
 
     void Start()
     {
@@ -20,6 +26,13 @@ public class TankHealth : MonoBehaviour
     public void TakeDamage(int damageAmount)
     {
         if (isDead) return;
+
+        // Shield blocks all damage
+        if (isShielded)
+        {
+            Debug.Log(gameObject.name + " damage blocked by shield!");
+            return;
+        }
 
         currentHealth -= damageAmount;
         Debug.Log(gameObject.name + " took damage! Health: " + currentHealth);
@@ -91,5 +104,43 @@ public class TankHealth : MonoBehaviour
 
         yield return new WaitForSecondsRealtime(1f);
         Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// Called by PowerUp to temporarily make the tank invincible.
+    /// </summary>
+    public void ApplyShield(float duration)
+    {
+        if (shieldCoroutine != null)
+            StopCoroutine(shieldCoroutine);
+
+        shieldCoroutine = StartCoroutine(ShieldRoutine(duration));
+    }
+
+    IEnumerator ShieldRoutine(float duration)
+    {
+        isShielded = true;
+        Debug.Log(gameObject.name + " shield active for " + duration + "s");
+
+        // Show shield visual
+        if (shieldVisualPrefab != null && activeShieldVisual == null)
+        {
+            activeShieldVisual = Instantiate(shieldVisualPrefab, transform);
+            activeShieldVisual.transform.localPosition = Vector3.zero;
+        }
+
+        yield return new WaitForSeconds(duration);
+
+        isShielded = false;
+        Debug.Log(gameObject.name + " shield ended");
+
+        // Remove shield visual
+        if (activeShieldVisual != null)
+        {
+            Destroy(activeShieldVisual);
+            activeShieldVisual = null;
+        }
+
+        shieldCoroutine = null;
     }
 }
