@@ -268,9 +268,9 @@ Tank Battle/
 ### Sprites
 - **Tank Sprites**: [Kenney.nl - Top Down Tanks](https://kenney.nl/assets/top-down-tanks)
 - **Block/Wall Sprites**: [Kenney.nl - Pixel Platformer Blocks](https://kenney.nl/assets/pixel-platformer-blocks)
-- **Power-Up Icons**: [placeholder]
+- **Speed Boost & Triple Shot Icons**: [Craftpix - Water and Fire Magic Sprite Pack](https://craftpix.net/freebies/free-water-and-fire-magic-sprite-vector-pack/)
 - **Heart Icon**: [Medium](https://medium.com/@250509/adding-a-health-power-up-in-unity-step-by-step-0fbf15351acd)
-- **Shield Icon**: [Pngtree](https://pngtree.com/freepng/pixel-art-sci-fi-shield-orb-glowing-blue-transparent-sphere-retro-style_21805236.html)
+- **Shield Icon**: [Craftpix - Shield 2D Game Assets Pack](https://craftpix.net/freebies/free-shield-2d-game-assets-pack/)
 
 ### Particle
 - **Heal Effect**: [Freeiconspng](https://www.freeiconspng.com/img/13072)
