@@ -49,8 +49,8 @@ public class MapPreviewGenerator : MonoBehaviour
         Texture2D texture = new Texture2D(width, height);
         Color bgColor = new Color(0.7f, 0.7f, 0.8f); 
         Color wallColor = new Color(0.8f, 0.6f, 0.4f); 
-        Color player1Color = new Color(0.2f, 0.6f, 1f); 
-        Color player2Color = new Color(1f, 0.3f, 0.3f); 
+        Color player1Color = new Color(1f, 0.3f, 0.3f); 
+        Color player2Color = new Color(0.2f, 0.6f, 1f); 
 
         // Fill background
         for (int y = 0; y < height; y++)

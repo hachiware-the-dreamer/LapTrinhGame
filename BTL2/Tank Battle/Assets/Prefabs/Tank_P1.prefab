@@ -356,7 +356,7 @@ MonoBehaviour:
   fireAction: {fileID: 1120369429361536294, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   fireCooldown: 0.5
   muzzleFlashPrefab: {fileID: 8423823287747203617, guid: b8075a801c714ef4ca8843f4a19fc6c4, type: 3}
-  tripleShotVisualPrefab: {fileID: 0}
+  tripleShotVisualPrefab: {fileID: 6101412410703083535, guid: b018fd8d36b0b7641acc611497758147, type: 3}
 --- !u!114 &7413400566580520687
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -372,7 +372,7 @@ MonoBehaviour:
   maxHealth: 3
   deathExplosionPrefab: {fileID: 5654462243439009087, guid: 45f44b1fbba3c6b4eb9f1bea6454f2c7, type: 3}
   shieldVisualPrefab: {fileID: 4731016543400168227, guid: 43f7bb479baf3934892db82aec9c4620, type: 3}
-  healEffectPrefab: {fileID: 0}
+  healEffectPrefab: {fileID: 8583562700477864619, guid: b254f1d5c3bb6cb449bc554e3bdcd80d, type: 3}
 --- !u!1 &3313125869319226013
 GameObject:
   m_ObjectHideFlags: 0

@@ -164,7 +164,7 @@ public class TankHealth : MonoBehaviour
             // Play heal effect
             if (healEffectPrefab != null)
             {
-                GameObject effect = Instantiate(healEffectPrefab, transform.position, Quaternion.identity);
+                GameObject effect = Instantiate(healEffectPrefab, transform.position, Quaternion.identity, transform);
                 Destroy(effect, 2f);
             }
 

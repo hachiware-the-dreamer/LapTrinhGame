@@ -193,8 +193,8 @@ public class MapSelectionManager : MonoBehaviour
         Texture2D texture = new Texture2D(width, height);
         Color bgColor = new Color(0.70f, 0.73f, 0.80f, 1f);
         Color wallColor = new Color(0.83f, 0.62f, 0.40f, 1f);
-        Color player1Color = new Color(0.28f, 0.62f, 0.98f, 1f);
-        Color player2Color = new Color(0.96f, 0.38f, 0.36f, 1f);
+        Color player1Color = new Color(0.96f, 0.38f, 0.36f, 1f);
+        Color player2Color = new Color(0.28f, 0.62f, 0.98f, 1f);
 
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
