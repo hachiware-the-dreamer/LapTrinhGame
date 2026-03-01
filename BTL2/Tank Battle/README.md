@@ -30,7 +30,7 @@ A 2-player local multiplayer tank combat game built with Unity. Battle your frie
 | Move Backward | S | Down Arrow |
 | Rotate Left | A | Left Arrow |
 | Rotate Right | D | Right Arrow |
-| Fire | Space | Enter |
+| Fire | Space/F | Enter/M |
 
 ---
 
@@ -66,6 +66,53 @@ Power-ups spawn randomly on the battlefield. Drive over them to collect:
 ### Destructible Walls
 
 Some walls on the map can be destroyed by shooting them, opening new pathways and angles of attack.
+
+---
+
+## Physics Implementation
+
+### Bullet Bouncing Formula
+
+The bullet bouncing mechanic uses the **vector reflection formula** to calculate realistic ricochets off walls:
+
+```
+v_new = v_old - 2(v_old · n)n
+```
+
+Where:
+- `v_old` = Initial velocity vector of the bullet
+- `n` = Surface normal vector (perpendicular to the wall)
+- `v_old · n` = Dot product between velocity and normal
+- `v_new` = Reflected velocity vector after bounce
+
+**How it works:**
+
+1. **Collision Detection**: Use raycasting to detect walls ahead of the bullet's path
+2. **Extract Normal Vector**: Get the surface normal from the raycast hit data
+3. **Calculate Reflection**: Apply the reflection formula using the dot product
+4. **Update Bullet**: Set the new velocity and rotate the bullet sprite to match
+
+This formula ensures **perfect elastic reflection** - the bullet bounces at the same angle it approached (angle of incidence = angle of reflection), maintaining its speed while changing direction based on the surface orientation.
+
+**Code Implementation:**
+
+```csharp
+// Raycast to detect collisions and get surface normal
+Vector2 step = velocity * Time.deltaTime;
+RaycastHit2D hit = Physics2D.Raycast(transform.position, velocity.normalized, step.magnitude, collisionLayers);
+
+// Calculate reflection using the normal vector from raycast
+Vector2 n = hit.normal;
+Vector2 vOld = velocity;
+float dotProduct = Vector2.Dot(vOld, n);
+Vector2 vNew = vOld - (2f * dotProduct * n);
+```
+
+**Raycasting Explained:**
+- `Physics2D.Raycast()` casts an invisible ray in the bullet's direction
+- Returns `RaycastHit2D` containing collision information
+- `hit.normal` provides the perpendicular vector to the surface hit
+- This normal is essential for calculating the correct bounce angle
 
 ---
 
