@@ -114,6 +114,63 @@ Vector2 vNew = vOld - (2f * dotProduct * n);
 - `hit.normal` provides the perpendicular vector to the surface hit
 - This normal is essential for calculating the correct bounce angle
 
+### Tank Wall Collision
+
+The tank collision system uses **axis-separated collision detection** to provide smooth wall sliding:
+
+**Movement Calculation:**
+
+First, the tank's velocity is calculated using trigonometry based on its rotation angle:
+
+```
+velocityX = speed × cos(angle)
+velocityY = speed × sin(angle)
+```
+
+Where:
+- `speed` = Current movement speed (with power-up multiplier)
+- `angle` = Tank's rotation angle in radians (+ 270° offset for sprite orientation)
+- Results in a velocity vector pointing in the tank's forward direction
+
+**Axis-Separated Collision:**
+
+Instead of checking diagonal movement directly, the system tests X and Y axes independently:
+
+1. **Test X-axis movement** - Try moving horizontally only
+2. **Test Y-axis movement** - Try moving vertically only
+3. Apply movement for each axis that doesn't collide with walls
+
+This creates a **sliding effect** - if you move diagonally into a wall, you'll slide along it instead of stopping completely.
+
+**Code Implementation:**
+
+```csharp
+// Calculate movement using trigonometry
+float angleInRadians = (currentAngle + 270f) * Mathf.Deg2Rad;
+float velocityX = currentSpeed * Mathf.Cos(angleInRadians);
+float velocityY = currentSpeed * Mathf.Sin(angleInRadians);
+Vector3 movement = new Vector3(velocityX, velocityY, 0f) * currentInput.y * Time.deltaTime;
+
+// Test X-axis collision
+Vector3 xOnlyPosition = transform.position + new Vector3(movement.x, 0f, 0f);
+Vector2 minCornerX = xPos2D + tankCollider.offset - (tankCollider.size / 2f);
+Vector2 maxCornerX = xPos2D + tankCollider.offset + (tankCollider.size / 2f);
+
+if (Physics2D.OverlapArea(minCornerX, maxCornerX, wallLayerMask) == null)
+{
+    finalPosition.x = xOnlyPosition.x; // No collision - allow X movement
+}
+
+// Test Y-axis collision (same process)
+// ...
+```
+
+**Collision Detection Method:**
+- `Physics2D.OverlapArea()` checks if a rectangular area overlaps with any walls
+- Uses the tank's `BoxCollider2D` bounds (position + offset ± size/2)
+- Returns `null` if no collision, allowing movement on that axis
+- This is more accurate than simple distance checks for rectangular tanks
+
 ---
 
 ## Map Selection
