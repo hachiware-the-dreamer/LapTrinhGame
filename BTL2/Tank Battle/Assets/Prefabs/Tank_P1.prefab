@@ -332,7 +332,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TankMovement
   moveSpeed: 5
   rotationSpeed: 180
-  speedBoostVisualPrefab: {fileID: 5535605872390237829, guid: c8c288424ae3b4749b072094b5220d67, type: 3}
+  speedBoostVisualPrefab: {fileID: 0}
   moveAction: {fileID: -1680190386980627800, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   tankCollider: {fileID: 792650407944487540}
   wallLayerMask:
