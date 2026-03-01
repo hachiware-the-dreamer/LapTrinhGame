@@ -158,7 +158,7 @@ Tank Battle/
 - **End Music**: [Victor_Natas - Freesound](https://freesound.org/people/Victor_Natas/sounds/741118/)
 
 ### Fonts
-- **Armalite**: [placeholder]
+- **Armalite**: [DaFont](https://www.dafont.com/armalite-rifle.font)
 - **Open Sans**: [Google Fonts](https://fonts.google.com/specimen/Open+Sans)
 
 ### Sprites
