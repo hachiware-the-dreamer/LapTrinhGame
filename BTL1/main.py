@@ -15,8 +15,18 @@ except pygame.error:
     print("Warning: Audio device not found, continuing without sound.")
 
 # Screen setup
-SCREEN_WIDTH = config.SCREEN_WIDTH
-SCREEN_HEIGHT = config.SCREEN_HEIGHT
+#hardcode
+# SCREEN_WIDTH = config.SCREEN_WIDTH
+# SCREEN_HEIGHT = config.SCREEN_HEIGHT
+
+infoObject = pygame.display.Info()
+
+monitor_width = infoObject.current_w
+monitor_height = infoObject.current_h
+
+SCREEN_WIDTH = monitor_width
+SCREEN_HEIGHT = monitor_height
+
 HUD_HEIGHT = 220
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Aim Trainer")
