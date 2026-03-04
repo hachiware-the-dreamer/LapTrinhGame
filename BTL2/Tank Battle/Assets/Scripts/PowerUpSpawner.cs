@@ -79,8 +79,18 @@ public class PowerUpSpawner : MonoBehaviour
 
     void SpawnRandomPowerUp()
     {
+        if (emptyTiles.Count == 0)
+        {
+            Debug.LogWarning("PowerUpSpawner: No empty tiles available for spawning!");
+            return;
+        }
+
         // Pick a random empty tile
-        Vector2 spawnPos = emptyTiles[Random.Range(0, emptyTiles.Count)];
+        int randomIndex = Random.Range(0, emptyTiles.Count);
+        Vector2 spawnPos = emptyTiles[randomIndex];
+        
+        // Remove this tile from available positions
+        emptyTiles.RemoveAt(randomIndex);
 
         // Pick a random power-up type (equal chance for all 3)
         GameObject prefab;
@@ -92,6 +102,8 @@ public class PowerUpSpawner : MonoBehaviour
         if (prefab == null)
         {
             Debug.LogWarning("PowerUpSpawner: A power-up prefab is not assigned!");
+            // Return the tile back to the list since we couldn't spawn
+            emptyTiles.Add(spawnPos);
             return;
         }
 
@@ -105,14 +117,18 @@ public class PowerUpSpawner : MonoBehaviour
         // Track when it gets picked up or destroyed
         PowerUpTracker tracker = powerUp.AddComponent<PowerUpTracker>();
         tracker.spawner = this;
+        tracker.occupiedPosition = spawnPos;
     }
 
     /// <summary>
     /// Called by PowerUpTracker when a power-up is destroyed (picked up or expired).
     /// </summary>
-    public void OnPowerUpDestroyed()
+    public void OnPowerUpDestroyed(Vector2 position)
     {
         activePowerUps = Mathf.Max(0, activePowerUps - 1);
+        
+        // Return the tile to the available spawn positions
+        emptyTiles.Add(position);
     }
 }
 
@@ -122,12 +138,14 @@ public class PowerUpSpawner : MonoBehaviour
 public class PowerUpTracker : MonoBehaviour
 {
     [HideInInspector] public PowerUpSpawner spawner;
+    [HideInInspector] public Vector2 occupiedPosition;
 
     void OnDestroy()
     {
-        if (spawner != null)
+        // Only run if the scene is still active and the spawner exists
+        if (gameObject.scene.isLoaded && spawner != null)
         {
-            spawner.OnPowerUpDestroyed();
+            spawner.OnPowerUpDestroyed(occupiedPosition);
         }
     }
 }

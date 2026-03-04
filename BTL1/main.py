@@ -20,9 +20,17 @@ except pygame.error:
     print("Warning: Audio device not found, continuing without sound.")
 
 # Screen setup
-SCREEN_WIDTH = pygame.display.Info().current_w
-SCREEN_HEIGHT = pygame.display.Info().current_h - 40
-print(f"Screen size: {SCREEN_WIDTH}x{SCREEN_HEIGHT}")
+# hardcode
+# SCREEN_WIDTH = config.SCREEN_WIDTH
+# SCREEN_HEIGHT = config.SCREEN_HEIGHT
+
+infoObject = pygame.display.Info()
+
+monitor_width = infoObject.current_w
+monitor_height = infoObject.current_h
+
+SCREEN_WIDTH = monitor_width
+SCREEN_HEIGHT = monitor_height
 
 HUD_HEIGHT = 220
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))

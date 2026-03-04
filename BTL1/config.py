@@ -1,7 +1,8 @@
 # ============================================================================
 # AIM TRAINER GAME CONFIGURATION
 # ============================================================================
-
+import pygame
+ 
 # Screen dimensions (Full HD)
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
