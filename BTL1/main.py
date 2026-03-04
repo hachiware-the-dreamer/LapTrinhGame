@@ -1,9 +1,14 @@
- 
 import pygame
 import sys
 
 import config
-from screens import ScreenStart, ScreenResults, ScreenPause, ScreenInstructions, ScreenSettings
+from screens import (
+    ScreenStart,
+    ScreenResults,
+    ScreenPause,
+    ScreenInstructions,
+    ScreenSettings,
+)
 from target import Target
 
 pygame.init()
@@ -15,8 +20,10 @@ except pygame.error:
     print("Warning: Audio device not found, continuing without sound.")
 
 # Screen setup
-SCREEN_WIDTH = config.SCREEN_WIDTH
-SCREEN_HEIGHT = config.SCREEN_HEIGHT
+SCREEN_WIDTH = pygame.display.Info().current_w
+SCREEN_HEIGHT = pygame.display.Info().current_h - 40
+print(f"Screen size: {SCREEN_WIDTH}x{SCREEN_HEIGHT}")
+
 HUD_HEIGHT = 220
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Aim Trainer")
@@ -24,7 +31,9 @@ clock = pygame.time.Clock()
 font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 50)
 large_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 70)
 small_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 30)
-countdown_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 200)
+countdown_font = pygame.font.Font(
+    "font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 200
+)
 ready_font = pygame.font.Font("font/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf", 60)
 
 # Cursor
@@ -72,7 +81,7 @@ current_target = None
 score = 0
 hits = 0
 misses = 0
-reaction_times = [] # For results
+reaction_times = []  # For results
 game_start_time = 0
 pause_start_time = 0
 pause_accumulated = 0  # Total time spent paused
@@ -108,21 +117,25 @@ def trigger_miss_flash():
 def draw_feedback_flash(surface):
     """Draw hit/miss feedback flashes"""
     current_time = pygame.time.get_ticks()
-    
+
     # Hit flash
     hit_elapsed = current_time - hit_flash_start
     if 0 <= hit_elapsed < config.HIT_FLASH_DURATION:
         alpha = int(100 * (1.0 - hit_elapsed / config.HIT_FLASH_DURATION))
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.rect(overlay, (*config.COLOR_HIT_FLASH, alpha), overlay.get_rect(), width=15)
+        pygame.draw.rect(
+            overlay, (*config.COLOR_HIT_FLASH, alpha), overlay.get_rect(), width=15
+        )
         surface.blit(overlay, (0, 0))
-    
+
     # Miss flash
     miss_elapsed = current_time - miss_flash_start
     if 0 <= miss_elapsed < config.MISS_FLASH_DURATION:
         alpha = int(120 * (1.0 - miss_elapsed / config.MISS_FLASH_DURATION))
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.rect(overlay, (*config.COLOR_MISS_FLASH, alpha), overlay.get_rect(), width=15)
+        pygame.draw.rect(
+            overlay, (*config.COLOR_MISS_FLASH, alpha), overlay.get_rect(), width=15
+        )
         surface.blit(overlay, (0, 0))
 
 
@@ -135,25 +148,25 @@ def draw_floating_text(surface):
     """Draw and update floating text"""
     current_time = pygame.time.get_ticks()
     to_remove = []
-    
+
     for i, (text, x, y, start_time, color) in enumerate(floating_text):
         elapsed = current_time - start_time
         duration = 800  # ms
-        
+
         if elapsed > duration:
             to_remove.append(i)
             continue
-        
+
         # Float upward and fade out
         progress = elapsed / duration
         current_y = y - (progress * 50)
         alpha = int(255 * (1.0 - progress))
-        
+
         text_surf = font.render(text, True, color)
         text_surf.set_alpha(alpha)
         text_rect = text_surf.get_rect(center=(x, current_y))
         surface.blit(text_surf, text_rect)
-    
+
     for i in reversed(to_remove):
         floating_text.pop(i)
 
@@ -161,7 +174,9 @@ def draw_floating_text(surface):
 def spawn_target():
     """Spawn a new target with current difficulty settings"""
     global current_target
-    current_target = Target(SCREEN_WIDTH, SCREEN_HEIGHT, current_radius, current_ttl, min_y=HUD_HEIGHT)
+    current_target = Target(
+        SCREEN_WIDTH, SCREEN_HEIGHT, current_radius, current_ttl, min_y=HUD_HEIGHT
+    )
 
 
 def calculate_score(reaction_time, ttl):
@@ -173,10 +188,10 @@ def calculate_score(reaction_time, ttl):
 def update_difficulty():
     """Gradually increase difficulty over time"""
     global current_ttl, current_radius, last_difficulty_increase
-    
+
     elapsed = pygame.time.get_ticks() - game_start_time
     intervals_passed = elapsed // config.SETTINGS["difficulty_ramp_interval"]
-    
+
     if intervals_passed > last_difficulty_increase:
         # Decrease TTL
         current_ttl = max(
@@ -196,7 +211,7 @@ def reset_game():
     global score, hits, misses, reaction_times, game_start_time
     global current_target, current_ttl, current_radius, last_difficulty_increase
     global floating_text, pause_accumulated, spawn_delay_timer, waiting_to_spawn
-    
+
     score = 0
     hits = 0
     misses = 0
@@ -205,18 +220,18 @@ def reset_game():
     pause_accumulated = 0
     spawn_delay_timer = 0.0
     waiting_to_spawn = False
-    
+
     current_ttl = config.SETTINGS["initial_ttl"]
     current_radius = config.SETTINGS["initial_target_radius"]
     last_difficulty_increase = 0
-    
+
     game_start_time = pygame.time.get_ticks()
     spawn_target()
 
 
 def draw_hud(surface, frozen_time_ms=None):
     """Draw the HUD during gameplay
-    
+
     Args:
         surface: Surface to draw on
         frozen_time_ms: If provided, display this time instead of calculating (for pause)
@@ -230,23 +245,23 @@ def draw_hud(surface, frozen_time_ms=None):
             config.SETTINGS["game_duration"]
             - (pygame.time.get_ticks() - game_start_time - pause_accumulated),
         )
-    
+
     seconds = time_remaining // 1000
     time_text = large_font.render(f"{seconds}s", True, config.COLOR_HUD_TEXT)
     surface.blit(time_text, (SCREEN_WIDTH // 2 - time_text.get_width() // 2, 30))
-    
+
     # Score (top left)
     score_text = font.render(f"Score: {score}", True, (200, 140, 0))
     surface.blit(score_text, (30, 30))
-    
+
     # Hits (left side, evenly spaced)
     hits_text = font.render(f"Hits: {hits}", True, (0, 150, 0))
     surface.blit(hits_text, (30, 95))
-    
+
     # Misses (left side, evenly spaced)
     misses_text = font.render(f"Misses: {misses}", True, (200, 0, 0))
     surface.blit(misses_text, (30, 160))
-    
+
     # Current difficulty info (top right)
     ttl_text = small_font.render(f"TTL: {current_ttl}ms", True, (80, 80, 80))
     radius_text = small_font.render(f"Size: {current_radius}px", True, (80, 80, 80))
@@ -329,12 +344,14 @@ while running:
                     points = calculate_score(reaction_time, current_ttl)
                     score += points
                     hits += 1
-                    
+
                     trigger_hit_flash()
                     if hit_sfx and hit_channel:
                         hit_channel.play(hit_sfx)
-                    add_floating_text(f"+{points}", mouse_pos[0], mouse_pos[1], (255, 255, 100))
-                    
+                    add_floating_text(
+                        f"+{points}", mouse_pos[0], mouse_pos[1], (255, 255, 100)
+                    )
+
                     # Start spawn delay before next target
                     current_target = None
                     waiting_to_spawn = True
@@ -358,20 +375,22 @@ while running:
             if current_target:
                 current_target.spawn_time += pause_duration
             game_state = GAME_STATE_PLAYING
-    
+
     if game_state == GAME_STATE_PLAYING:
         # Check if time expired
         elapsed_time = pygame.time.get_ticks() - game_start_time - pause_accumulated
         if elapsed_time >= config.SETTINGS["game_duration"]:
             # Game over
-            avg_reaction = sum(reaction_times) / len(reaction_times) if reaction_times else 0
+            avg_reaction = (
+                sum(reaction_times) / len(reaction_times) if reaction_times else 0
+            )
             best_reaction = min(reaction_times) if reaction_times else 0
             results_screen.set_stats(score, hits, misses, avg_reaction, best_reaction)
             game_state = GAME_STATE_RESULTS
         else:
             # Update difficulty
             update_difficulty()
-            
+
             # Handle spawn delay using dt (frame-rate independent)
             if waiting_to_spawn:
                 spawn_delay_timer += dt
@@ -379,11 +398,11 @@ while running:
                     waiting_to_spawn = False
                     spawn_delay_timer = 0.0
                     spawn_target()
-            
+
             # Update current target
             if current_target:
                 current_target.update()
-                
+
                 # Check if target expired
                 if not current_target.alive:
                     misses += 1
@@ -410,14 +429,14 @@ while running:
 
     elif game_state == GAME_STATE_PLAYING:
         screen.fill(config.COLOR_BACKGROUND)
-        
+
         # Draw target
         if current_target:
             current_target.draw(screen)
-        
+
         # Draw HUD
         draw_hud(screen)
-        
+
         # Draw feedback
         draw_feedback_flash(screen)
         draw_floating_text(screen)
@@ -427,7 +446,7 @@ while running:
         screen.fill(config.COLOR_BACKGROUND)
         if current_target:
             current_target.draw(screen)
-        
+
         # Calculate frozen time (time when pause started)
         frozen_time = max(
             0,
@@ -435,16 +454,16 @@ while running:
             - (pause_start_time - game_start_time - pause_accumulated),
         )
         draw_hud(screen, frozen_time)
-        
+
         # Draw pause overlay
         pause_screen.draw(screen)
-    
+
     elif game_state == GAME_STATE_COUNTDOWN:
         # Draw game in background
         screen.fill(config.COLOR_BACKGROUND)
         if current_target:
             current_target.draw(screen)
-        
+
         # Calculate frozen time (time when pause started)
         frozen_time = max(
             0,
@@ -452,24 +471,30 @@ while running:
             - (pause_start_time - game_start_time - pause_accumulated),
         )
         draw_hud(screen, frozen_time)
-        
+
         # Draw countdown overlay
         countdown_elapsed = pygame.time.get_ticks() - countdown_start_time
         countdown_remaining = (countdown_duration - countdown_elapsed) // 1000 + 1
-        
+
         # Semi-transparent overlay
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 100))
         screen.blit(overlay, (0, 0))
-        
+
         # Countdown number
-        countdown_text = countdown_font.render(str(countdown_remaining), True, (255, 255, 255))
-        countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        countdown_text = countdown_font.render(
+            str(countdown_remaining), True, (255, 255, 255)
+        )
+        countdown_rect = countdown_text.get_rect(
+            center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        )
         screen.blit(countdown_text, countdown_rect)
-        
+
         # "Get Ready" text
         ready_text = ready_font.render("GET READY!", True, (255, 255, 255))
-        ready_rect = ready_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
+        ready_rect = ready_text.get_rect(
+            center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150)
+        )
         screen.blit(ready_text, ready_rect)
 
     # Draw cursor
@@ -482,4 +507,3 @@ while running:
 
 pygame.quit()
 sys.exit()
-
