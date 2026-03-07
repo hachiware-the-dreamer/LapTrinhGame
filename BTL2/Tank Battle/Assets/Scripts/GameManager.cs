@@ -56,10 +56,11 @@ public class GameManager : MonoBehaviour
         // The winner is the OTHER player
         string winner = (destroyedTag == "Player1") ? "Xanh SM Wins!" : "Shopee Wins!";
 
-        // Play end music
+        // Stop background music and play end sfx
         if (AudioManager.Instance != null)
         {
-            AudioManager.Instance.PlayEndMusic();
+            AudioManager.Instance.StopMusic();
+            AudioManager.Instance.PlayEndSound();
         }
 
         if (winnerText != null)

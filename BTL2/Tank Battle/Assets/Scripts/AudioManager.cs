@@ -16,11 +16,11 @@ public class AudioManager : MonoBehaviour
     public AudioClip moveSound;
     public AudioClip hurtSound;
     public AudioClip pickupSound;
+    public AudioClip endSound;     // End screen sfx
 
     [Header("Background Music")]
     public AudioClip introMusic;   // Main menu music
     public AudioClip gameMusic;    // Gameplay music
-    public AudioClip endMusic;     // End screen music
 
     void Awake()
     {
@@ -88,6 +88,11 @@ public class AudioManager : MonoBehaviour
         PlaySound(pickupSound);
     }
 
+    public void PlayEndSound()
+    {
+        PlaySound(endSound);
+    }
+
     public void PlaySound(AudioClip clip)
     {
         if (sfxSource != null && clip != null)
@@ -113,11 +118,6 @@ public class AudioManager : MonoBehaviour
     public void PlayGameMusic()
     {
         PlayMusic(gameMusic);
-    }
-
-    public void PlayEndMusic()
-    {
-        PlayMusic(endMusic, false); // Don't loop end music
     }
 
     public void PlayMusic(AudioClip clip, bool loop = true)
