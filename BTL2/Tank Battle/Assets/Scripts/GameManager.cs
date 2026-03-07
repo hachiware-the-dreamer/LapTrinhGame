@@ -10,6 +10,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] GameObject endScreenPanel;
     private TextMeshProUGUI winnerText;
 
+    public bool IsGameOver { get; private set; }
+
     void Awake()
     {
         Instance = this;
@@ -64,10 +66,16 @@ public class GameManager : MonoBehaviour
             winnerText.text = winner;
 
         if (endScreenPanel != null)
+        {
+            // Ensure the parent canvas is active (it may start disabled in the scene)
+            Transform parent = endScreenPanel.transform.parent;
+            if (parent != null) parent.gameObject.SetActive(true);
             endScreenPanel.SetActive(true);
+        }
 
         // Freeze the game so nothing keeps moving
         Time.timeScale = 0f;
+        IsGameOver = true;
     }
 
     public void RestartGame()
