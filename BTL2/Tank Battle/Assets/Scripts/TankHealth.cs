@@ -18,6 +18,10 @@ public class TankHealth : MonoBehaviour
     [SerializeField] GameObject shieldVisualPrefab;  // Optional: a circle/bubble sprite around the tank
     private GameObject activeShieldVisual;
 
+    [Header("Heal Visual")]
+    [SerializeField] GameObject healEffectPrefab;
+
+
     void Start()
     {
         currentHealth = maxHealth;
@@ -142,5 +146,30 @@ public class TankHealth : MonoBehaviour
         }
 
         shieldCoroutine = null;
+    }
+    public void Heal(int amount)
+    {
+        if (isDead) return;
+
+        int previousHealth = currentHealth;
+        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+
+        if (currentHealth > previousHealth)
+        {
+            Debug.Log(gameObject.name + " healed! Health: " + currentHealth);
+
+            // Play heal effect
+            if (healEffectPrefab != null)
+            {
+                GameObject effect = Instantiate(healEffectPrefab, transform.position, Quaternion.identity, transform);
+                Destroy(effect, 2f);
+            }
+
+            // Update HUD
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.UpdateHealth(gameObject.tag, currentHealth);
+            }
+        }
     }
 }

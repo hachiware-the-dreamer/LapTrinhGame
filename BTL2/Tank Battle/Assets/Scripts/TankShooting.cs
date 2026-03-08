@@ -20,6 +20,10 @@ public class TankShooting : MonoBehaviour
     private bool tripleShot = false;
     private Coroutine tripleShotCoroutine;
 
+    [Header("Triple Shot Visual")]
+    [SerializeField] GameObject tripleShotVisualPrefab;  // Glow or aura effect
+    private GameObject activeTripleShotVisual;
+
     private void OnEnable() { fireAction.action.Enable(); }
     private void OnDisable() { fireAction.action.Disable(); }
 
@@ -88,9 +92,27 @@ public class TankShooting : MonoBehaviour
     {
         tripleShot = true;
         Debug.Log(gameObject.name + " triple shot active for " + duration + "s");
+
+        // Show triple shot visual
+        if (tripleShotVisualPrefab != null && activeTripleShotVisual == null)
+        {
+            activeTripleShotVisual = Instantiate(tripleShotVisualPrefab, transform);
+            activeTripleShotVisual.transform.localPosition = Vector3.zero;
+        }
+
         yield return new WaitForSeconds(duration);
+
         tripleShot = false;
         Debug.Log(gameObject.name + " triple shot ended");
+
+        // Remove triple shot visual
+        if (activeTripleShotVisual != null)
+        {
+            Destroy(activeTripleShotVisual);
+            activeTripleShotVisual = null;
+        }
+
         tripleShotCoroutine = null;
     }
+
 }

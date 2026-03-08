@@ -8,6 +8,7 @@ public class PowerUpSpawner : MonoBehaviour
     [SerializeField] GameObject speedBoostPrefab;   // Wind-like power-up
     [SerializeField] GameObject tripleShotPrefab;   // Triple shot power-up
     [SerializeField] GameObject shieldPrefab;       // Shield power-up
+    [SerializeField] GameObject healPrefab;
 
     [Header("Spawn Settings")]
     [SerializeField] float spawnInterval = 5f;       // Seconds between spawns
@@ -94,10 +95,11 @@ public class PowerUpSpawner : MonoBehaviour
 
         // Pick a random power-up type (equal chance for all 3)
         GameObject prefab;
-        int roll = Random.Range(0, 3);
+        int roll = Random.Range(0, 4);
         if (roll == 0) prefab = speedBoostPrefab;
         else if (roll == 1) prefab = tripleShotPrefab;
-        else prefab = shieldPrefab;
+        else if (roll == 2) prefab = shieldPrefab;
+        else prefab = healPrefab;
 
         if (prefab == null)
         {

@@ -5,7 +5,8 @@ public enum PowerUpType
 {
     SpeedBoost,
     TripleShot,
-    Shield
+    Shield,
+    HealthBoost
 }
 
 public class PowerUp : MonoBehaviour
@@ -39,8 +40,8 @@ public class PowerUp : MonoBehaviour
 
         ApplyEffect(other.gameObject);
 
-        // Show power-up notification on HUD
-        if (UIManager.Instance != null)
+        // Show power-up bar on HUD (only for timed effects, not instant ones like HealthBoost)
+        if (type != PowerUpType.HealthBoost && UIManager.Instance != null)
         {
             string powerUpName = GetPowerUpDisplayName();
             UIManager.Instance.ShowPowerUp(other.gameObject.tag, powerUpName, duration);
@@ -91,6 +92,13 @@ public class PowerUp : MonoBehaviour
                 if (health != null)
                 {
                     health.ApplyShield(duration);
+                }
+                break;
+            case PowerUpType.HealthBoost:
+                TankHealth tankHP = tank.GetComponent<TankHealth>();
+                if (tankHP != null)
+                {
+                    tankHP.Heal(1);
                 }
                 break;
         }
