@@ -387,11 +387,11 @@ MonoBehaviour:
   bounceSound: {fileID: 8300000, guid: eb57afd0565ae30458b4670c53895ef9, type: 3}
   explodeSound: {fileID: 8300000, guid: f345aa85af65fbc4ba8e045ef6cdaa70, type: 3}
   moveSound: {fileID: 8300000, guid: 9fa97f2bec2376c4681f2519d3bb0a8d, type: 3}
-  hurtSound: {fileID: 8300000, guid: a46d6b04c6774e8459b8e959a9c747f3, type: 3}
-  pickupSound: {fileID: 8300000, guid: 0422f2f0ed91f6e4e92a4fcfe3c39973, type: 3}
+  hurtSound: {fileID: 8300000, guid: ea0bbd66197edb84498247a55d72cea4, type: 3}
+  pickupSound: {fileID: 8300000, guid: e289e58f851ae3e4b9ef2c75384e254f, type: 3}
+  endSound: {fileID: 8300000, guid: 71b6febbfb929d04181db51b03103d03, type: 3}
   introMusic: {fileID: 8300000, guid: 03627527b9310de4db60241a3cc3d5a3, type: 3}
-  gameMusic: {fileID: 8300000, guid: abcfadb22e5fea84299fb6eae3ae3625, type: 3}
-  endMusic: {fileID: 8300000, guid: cd661ff21ab9998468287ce0d4982d7f, type: 3}
+  gameMusic: {fileID: 8300000, guid: 3478e8c97a5ae8c4185bf18179003882, type: 3}
 --- !u!4 &83141908
 Transform:
   m_ObjectHideFlags: 0
