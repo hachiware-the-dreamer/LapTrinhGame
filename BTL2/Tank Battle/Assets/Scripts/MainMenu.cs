@@ -11,6 +11,7 @@ public class MainMenuController : MonoBehaviour
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.PlayIntroMusic();
+            AudioManager.Instance.SetMusicVolume(0.5f);
         }
     }
 

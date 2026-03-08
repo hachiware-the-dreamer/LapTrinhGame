@@ -20,6 +20,7 @@ public class GameManager : MonoBehaviour
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.PlayGameMusic();
+            AudioManager.Instance.SetMusicVolume(0.2f);
         }
 
         // Auto-find the TMP text inside the end screen panel
