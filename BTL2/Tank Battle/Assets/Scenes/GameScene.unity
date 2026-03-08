@@ -1004,6 +1004,7 @@ MonoBehaviour:
   speedBoostPrefab: {fileID: 7146718961184852239, guid: 91c1d5f10beb8e243ad6d3e24d3536fc, type: 3}
   tripleShotPrefab: {fileID: 6320190771630710649, guid: 198b3d0cb64d81c4eab59ab116dc665a, type: 3}
   shieldPrefab: {fileID: 2886620904306979444, guid: 9bdad783c3ce26647b5f7fa7941b763f, type: 3}
+  healPrefab: {fileID: 6888477385281616961, guid: 0cd84681c425050498797b16a2da3eb9, type: 3}
   spawnInterval: 8
   firstSpawnDelay: 3
   maxPowerUpsOnMap: 3

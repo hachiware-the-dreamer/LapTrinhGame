@@ -71,7 +71,8 @@ public class PowerUpSpawner : MonoBehaviour
         {
             yield return new WaitForSeconds(spawnInterval);
 
-            if (activePowerUps < maxPowerUpsOnMap && emptyTiles.Count > 0)
+            // Spawn 3 power-ups at a time
+            for (int i = 0; i < 3 && activePowerUps < maxPowerUpsOnMap && emptyTiles.Count > 0; i++)
             {
                 SpawnRandomPowerUp();
             }
