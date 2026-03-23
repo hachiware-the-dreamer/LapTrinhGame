@@ -22,12 +22,45 @@ class Collectible(Entity):
     pass
 
 class TunnelPart(Entity):
-    def __init__(self, x, y, width, height, speed_x):
+    def __init__(self, x, y, width, height, speed_x, base_image=None, is_cap=False, point_down=False, overlap=0):
         super().__init__(x, y, speed_x)
-        self.image = pygame.Surface((width, height))
-        self.image.fill((34, 139, 34)) # Forest Green
         
-        # AABB collision box
+        if base_image:
+            self.image = pygame.Surface((width, height), pygame.SRCALPHA)
+            
+            if is_cap:
+                # Caps are rotated sideways and stretched to fit exactly
+                img_to_scale = pygame.transform.rotate(base_image, 90)
+                scaled_img = pygame.transform.scale(img_to_scale, (width, height))
+                self.image.blit(scaled_img, (0, 0))
+            else:
+                img_to_scale = base_image
+                if point_down:
+                    # Rotate 180 degrees so the jar hangs upside down
+                    img_to_scale = pygame.transform.rotate(base_image, 180)
+
+                ratio = width / img_to_scale.get_width()
+                scaled_h = int(img_to_scale.get_height() * ratio)
+                
+                if scaled_h > 0:
+                    scaled_img = pygame.transform.scale(img_to_scale, (width, scaled_h))
+                    
+                    if point_down:
+                        # Tile Bottom-Up (so it connects cleanly to the top cap)
+                        current_y = height - scaled_h
+                        while current_y > -scaled_h:
+                            self.image.blit(scaled_img, (0, current_y))
+                            current_y -= (scaled_h - overlap)
+                    else:
+                        # Tile Top-Down (so it connects cleanly to the bottom cap)
+                        current_y = 0
+                        while current_y < height:
+                            self.image.blit(scaled_img, (0, current_y))
+                            current_y += (scaled_h - overlap)
+        else:
+            self.image = pygame.Surface((width, height))
+            self.image.fill((34, 139, 34)) 
+            
         self.rect = self.image.get_rect(topleft=(x, y))
 
 class ScoreZone(Entity):
@@ -96,6 +129,20 @@ class SpawnerManager:
         self.gap_shrink_rate = shrink_rate
         
         self.tunnels_spawned = 0
+
+        # Mixi food jar
+        try:
+            raw_img = pygame.image.load("assets/sprites/tunnel.png").convert_alpha()
+            
+            # 1. Find the smallest box that contains the actual visible pixels
+            bbox = raw_img.get_bounding_rect() 
+            
+            # 2. Create a new, perfectly cropped image using that box
+            self.tunnel_img = raw_img.subsurface(bbox).copy()
+            
+        except pygame.error:
+            print("Warning: Could not load assets/sprites/tunnel.png")
+            self.tunnel_img = None
         
     def update(self, dt):
         self.spawn_timer += dt
@@ -104,7 +151,6 @@ class SpawnerManager:
             self.spawn_tunnel_pair()
 
     def spawn_tunnel_pair(self):
-        # Convert the float to an integer for pixel placement
         gap_size = int(self.current_gap_size) 
         gap_y = random.randint(200, HEIGHT - 200 - gap_size)
         
@@ -114,23 +160,45 @@ class SpawnerManager:
         cap_w, cap_h = 140, 50
         pillar_w, pillar_h = 80, 800
         pillar_offset = (cap_w - pillar_w) // 2
+        
+        overlap_amount = 36 
+        
+        # This forces the vertical pipes to sink 20px inside the caps to hide any gaps!
+        connection_sink = 30
 
-        # Spawn Top Tunnel
-        top_pillar = TunnelPart(x_pos + pillar_offset, gap_y - cap_h - pillar_h, pillar_w, pillar_h, speed)
-        top_cap = TunnelPart(x_pos, gap_y - cap_h, cap_w, cap_h, speed)
+        # --- SPAWN TOP TUNNEL ---
+        top_pillar = TunnelPart(
+            x_pos + pillar_offset, 
+            gap_y - cap_h - pillar_h + connection_sink, # Shifted Down
+            pillar_w, pillar_h, speed, self.tunnel_img, 
+            is_cap=False, point_down=True, overlap=overlap_amount
+        )
+        top_cap = TunnelPart(
+            x_pos, gap_y - cap_h, 
+            cap_w, cap_h, speed, self.tunnel_img, 
+            is_cap=True
+        )
         
-        # Spawn Bottom Tunnel
-        bottom_cap = TunnelPart(x_pos, gap_y + gap_size, cap_w, cap_h, speed)
-        bottom_pillar = TunnelPart(x_pos + pillar_offset, gap_y + gap_size + cap_h, pillar_w, pillar_h, speed)
+        # --- SPAWN BOTTOM TUNNEL ---
+        bottom_cap = TunnelPart(
+            x_pos, gap_y + gap_size, 
+            cap_w, cap_h, speed, self.tunnel_img, 
+            is_cap=True
+        )
+        bottom_pillar = TunnelPart(
+            x_pos + pillar_offset, 
+            gap_y + gap_size + cap_h - connection_sink, # Shifted Up
+            pillar_w, pillar_h, speed, self.tunnel_img, 
+            is_cap=False, point_down=False, overlap=overlap_amount
+        )
         
-        # Spawn the invisible score zone
         score_zone = ScoreZone(x_pos + cap_w, gap_y, 20, gap_size, speed)
         
-        self.tunnels_group.add(top_pillar, top_cap, bottom_cap, bottom_pillar)
+        # Add pillars FIRST so the caps draw on top of them and hide the seams
+        self.tunnels_group.add(top_pillar, bottom_pillar, top_cap, bottom_cap)
         self.score_zones_group.add(score_zone)
         
-        # Delayed difficulty scaling
         self.tunnels_spawned += 1
-        if self.tunnels_spawned > 3:
+        if self.tunnels_spawned > 3: 
             if self.current_gap_size > self.min_gap_size:
                 self.current_gap_size -= self.gap_shrink_rate
