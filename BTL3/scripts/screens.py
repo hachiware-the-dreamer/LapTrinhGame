@@ -179,6 +179,7 @@ class SettingsScreen:
         if self.active_tab == "SFX":
             self.game.music_vol = self.music_slider.value
             self.game.sfx_vol = self.sfx_slider.value
+            self.game.update_music_volume()
         elif self.active_tab == "Difficulty":
             self.game.start_gap = self.gap_start_slider.value
             self.game.min_gap = self.gap_min_slider.value

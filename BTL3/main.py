@@ -20,8 +20,19 @@ class GameManager:
         self.game_mode = "Flappy"
         self.char_idx = 0
         self.bg_idx = 0
-        self.music_vol = 1.0
-        self.sfx_vol = 1.0
+        self.music_vol = 0.36
+        self.sfx_vol = 0.36
+
+        # Sound muffling mechanics
+        self.current_music_vol = 1.0
+        self.target_music_vol = 1.0
+
+        # SFX
+        try:
+            self.sfx_die = pygame.mixer.Sound("assets/sfx/die.mp3")
+        except pygame.error:
+            print("Warning: Could not find sound file at assets/sfx/die.mp3")
+            self.sfx_die = None
 
         # Scaling settings
         self.start_gap = 300.0
@@ -44,6 +55,29 @@ class GameManager:
         self.instructions_screen = InstructionsScreen(self)
         self.settings_screen = SettingsScreen(self)
 
+    def update_music_volume(self):
+        """Sets the target volume. The update loop will smoothly fade to it."""
+        if self.current_state in [GameState.PAUSE, GameState.GAME_OVER]:
+            self.target_music_vol = self.music_vol * 0.3
+        else:
+            self.target_music_vol = self.music_vol
+
+    def _update_audio(self, dt):
+        """Smoothly glides the current volume toward the target volume every frame."""
+        fade_speed = 2.0 # Adjust this! Higher = faster fade, Lower = slower fade
+        
+        if self.current_music_vol < self.target_music_vol:
+            self.current_music_vol += fade_speed * dt
+            if self.current_music_vol > self.target_music_vol:
+                self.current_music_vol = self.target_music_vol
+                
+        elif self.current_music_vol > self.target_music_vol:
+            self.current_music_vol -= fade_speed * dt
+            if self.current_music_vol < self.target_music_vol:
+                self.current_music_vol = self.target_music_vol
+                
+        pygame.mixer.music.set_volume(self.current_music_vol)
+
     # --- STATE TRANSITIONS ---
     def start_game(self):
         self.all_sprites.empty()
@@ -56,7 +90,16 @@ class GameManager:
         
         self.spawner = SpawnerManager(self.tunnels, self.score_zones, self.start_gap, self.min_gap, self.shrink_rate)
         self.score = 0
+
+        if self.current_state == GameState.MAIN_MENU:
+            try:
+                pygame.mixer.music.load("assets/musics/bgm.mp3") 
+                pygame.mixer.music.play(loops=-1)
+            except pygame.error:
+                print("Warning: Could not find music file at assets/musics/bgm.mp3")
+
         self.current_state = GameState.PLAY
+        self.update_music_volume() # Restores full volume if we clicked "Retry" from Game Over
 
     def toggle_pause(self):
         if self.current_state == GameState.PLAY:
@@ -64,11 +107,20 @@ class GameManager:
         elif self.current_state == GameState.PAUSE:
             self.current_state = GameState.PLAY
 
+        self.update_music_volume()
+
     def end_game(self):
+        if self.current_state == GameState.PLAY:
+            if self.sfx_die:
+                self.sfx_die.set_volume(self.sfx_vol) # Sync with the Settings slider
+                self.sfx_die.play()
+        
         self.current_state = GameState.GAME_OVER
+        self.update_music_volume()
 
     def go_to_menu(self):
         self.current_state = GameState.MAIN_MENU
+        pygame.mixer.music.stop()
 
     def go_to_instructions(self):
         self.current_state = GameState.INSTRUCTIONS
@@ -83,6 +135,8 @@ class GameManager:
     def run(self):
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
+
+            self._update_audio(dt)
             
             events = pygame.event.get()
             for event in events:
