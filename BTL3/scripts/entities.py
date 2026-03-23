@@ -85,10 +85,17 @@ class Player(pygame.sprite.Sprite):
             self.velocity_y = self.flap_power
 
 class SpawnerManager:
-    def __init__(self, tunnels_group, score_zones_group):
+    def __init__(self, tunnels_group, score_zones_group, start_gap, min_gap, shrink_rate):
         self.tunnels_group = tunnels_group
         self.score_zones_group = score_zones_group
         self.spawn_timer = 0.0
+        
+        # Difficulty scaling settings
+        self.current_gap_size = start_gap
+        self.min_gap_size = min_gap
+        self.gap_shrink_rate = shrink_rate
+        
+        self.tunnels_spawned = 0
         
     def update(self, dt):
         self.spawn_timer += dt
@@ -97,7 +104,8 @@ class SpawnerManager:
             self.spawn_tunnel_pair()
 
     def spawn_tunnel_pair(self):
-        gap_size = 280 
+        # Convert the float to an integer for pixel placement
+        gap_size = int(self.current_gap_size) 
         gap_y = random.randint(200, HEIGHT - 200 - gap_size)
         
         x_pos = WIDTH + 100
@@ -115,8 +123,14 @@ class SpawnerManager:
         bottom_cap = TunnelPart(x_pos, gap_y + gap_size, cap_w, cap_h, speed)
         bottom_pillar = TunnelPart(x_pos + pillar_offset, gap_y + gap_size + cap_h, pillar_w, pillar_h, speed)
         
-        # Spawn score zone
+        # Spawn the invisible score zone
         score_zone = ScoreZone(x_pos + cap_w, gap_y, 20, gap_size, speed)
         
         self.tunnels_group.add(top_pillar, top_cap, bottom_cap, bottom_pillar)
         self.score_zones_group.add(score_zone)
+        
+        # Delayed difficulty scaling
+        self.tunnels_spawned += 1
+        if self.tunnels_spawned > 3:
+            if self.current_gap_size > self.min_gap_size:
+                self.current_gap_size -= self.gap_shrink_rate

@@ -70,20 +70,46 @@ class InstructionsScreen:
         for btn in self.buttons:
             btn.draw(surface)
 
+from scripts.utils import UIButton, UISlider
+
 class SettingsScreen:
     def __init__(self, game):
         self.game = game
         self.font_title = pygame.font.SysFont(None, 96)
         self.font_sub = pygame.font.SysFont(None, 64)
         
-        self.active_tab = "Customize" # Defaults to the Customize tab
+        self.active_tab = "Customize" 
         
-        # Sliders hold their own state, we init them once here
+        # --- AUDIO SLIDERS ---
         self.music_slider = UISlider(WIDTH // 2 - 250, 400, 500, 20, 0.0, 1.0, self.game.music_vol, "Music Volume")
         self.sfx_slider = UISlider(WIDTH // 2 - 250, 600, 500, 20, 0.0, 1.0, self.game.sfx_vol, "SFX Volume")
         
+        # --- DIFFICULTY SLIDERS ---
+        self.gap_start_slider = UISlider(WIDTH // 2 - 250, 450, 500, 20, 150.0, 500.0, self.game.start_gap, "Start Gap Size", is_int=True)
+        self.gap_min_slider = UISlider(WIDTH // 2 - 250, 580, 500, 20, 80.0, 300.0, self.game.min_gap, "Minimum Gap Size", is_int=True)
+        self.gap_shrink_slider = UISlider(WIDTH // 2 - 250, 710, 500, 20, 0.0, 50.0, self.game.shrink_rate, "Shrink Rate", is_int=True)
+        
         self.ui_elements = []
         self.build_ui()
+
+    def apply_preset(self, preset_name):
+        """Snaps the sliders to predefined hardcore/casual settings."""
+        if preset_name == "Easy":
+            self.gap_start_slider.set_value(400.0)
+            self.gap_min_slider.set_value(200.0)
+            self.gap_shrink_slider.set_value(2.0)
+        elif preset_name == "Medium":
+            self.gap_start_slider.set_value(300.0)
+            self.gap_min_slider.set_value(140.0)
+            self.gap_shrink_slider.set_value(5.0)
+        elif preset_name == "Hard":
+            self.gap_start_slider.set_value(250.0)
+            self.gap_min_slider.set_value(100.0)
+            self.gap_shrink_slider.set_value(10.0)
+        elif preset_name == "Asian":
+            self.gap_start_slider.set_value(150.0)
+            self.gap_min_slider.set_value(80.0)
+            self.gap_shrink_slider.set_value(30.0)
 
     def set_tab(self, tab_name):
         self.active_tab = tab_name
@@ -91,7 +117,7 @@ class SettingsScreen:
 
     def toggle_mode(self):
         self.game.game_mode = "Swing" if self.game.game_mode == "Flappy" else "Flappy"
-        self.game.char_idx = 0 # Reset char index when swapping modes to be safe
+        self.game.char_idx = 0 
         self.build_ui()
 
     def select_char(self, idx):
@@ -103,67 +129,74 @@ class SettingsScreen:
         self.build_ui()
 
     def build_ui(self):
-        """Reconstructs the buttons and applies active green highlights based on game state."""
         self.ui_elements.clear()
         center_x = WIDTH // 2
         
-        tab_w, tab_h = 300, 80
-        btn_cust = UIButton(center_x - 320, 200, tab_w, tab_h, "Customize", lambda: self.set_tab("Customize"), font_size=56)
-        btn_sfx = UIButton(center_x + 20, 200, tab_w, tab_h, "Audio / SFX", lambda: self.set_tab("SFX"), font_size=56)
+        tab_w, tab_h = 280, 80
+        btn_cust = UIButton(center_x - 450, 200, tab_w, tab_h, "Customize", lambda: self.set_tab("Customize"), font_size=48)
+        btn_diff = UIButton(center_x - 140, 200, tab_w, tab_h, "Difficulty", lambda: self.set_tab("Difficulty"), font_size=48)
+        btn_sfx = UIButton(center_x + 170, 200, tab_w, tab_h, "Audio / SFX", lambda: self.set_tab("SFX"), font_size=48)
         
         btn_cust.is_active = (self.active_tab == "Customize")
+        btn_diff.is_active = (self.active_tab == "Difficulty")
         btn_sfx.is_active = (self.active_tab == "SFX")
-        self.ui_elements.extend([btn_cust, btn_sfx])
+        self.ui_elements.extend([btn_cust, btn_diff, btn_sfx])
 
-        # Customize tab
         if self.active_tab == "Customize":
-            # Mode Toggle
-            btn_mode = UIButton(center_x - 200, 350, 400, 80, f"Mode: {self.game.game_mode}", self.toggle_mode, font_size=56)
+            btn_mode = UIButton(center_x - 200, 330, 400, 80, f"Mode: {self.game.game_mode}", self.toggle_mode, font_size=56)
             self.ui_elements.append(btn_mode)
             
-            # Character Selection (Changes text based on mode)
             char_prefix = "Bird" if self.game.game_mode == "Flappy" else "Copter"
             for i in range(3):
-                # Using lambda idx=i forces Python to bind the current value of i to the callback
-                btn_char = UIButton(center_x - 420 + (i * 280), 500, 250, 80, f"{char_prefix} {i+1}", lambda idx=i: self.select_char(idx), font_size=48)
+                btn_char = UIButton(center_x - 420 + (i * 280), 480, 250, 80, f"{char_prefix} {i+1}", lambda idx=i: self.select_char(idx), font_size=48)
                 btn_char.is_active = (self.game.char_idx == i)
                 self.ui_elements.append(btn_char)
                 
-            # Background Selection
             for i in range(3):
                 btn_bg = UIButton(center_x - 420 + (i * 280), 650, 250, 80, f"BG {i+1}", lambda idx=i: self.select_bg(idx), font_size=48)
                 btn_bg.is_active = (self.game.bg_idx == i)
                 self.ui_elements.append(btn_bg)
 
-        # SFX tab
+        elif self.active_tab == "Difficulty":
+            # Preset buttons
+            btn_easy = UIButton(center_x - 435, 310, 200, 60, "Easy", lambda: self.apply_preset("Easy"), font_size=40)
+            btn_med = UIButton(center_x - 215, 310, 200, 60, "Medium", lambda: self.apply_preset("Medium"), font_size=40)
+            btn_hard = UIButton(center_x + 5, 310, 200, 60, "Hard", lambda: self.apply_preset("Hard"), font_size=40)
+            btn_asian = UIButton(center_x + 225, 310, 200, 60, "Asian", lambda: self.apply_preset("Asian"), font_size=40)
+            
+            self.ui_elements.extend([btn_easy, btn_med, btn_hard, btn_asian])
+            self.ui_elements.extend([self.gap_start_slider, self.gap_min_slider, self.gap_shrink_slider])
+
         elif self.active_tab == "SFX":
             self.ui_elements.extend([self.music_slider, self.sfx_slider])
 
-        # Back button
         self.ui_elements.append(UIButton(center_x - 200, 850, 400, 80, "Back", self.game.go_to_menu, font_size=56))
 
     def update(self, events):
         for elem in self.ui_elements:
             elem.update(events)
             
-        # Continuously sync the slider values back to the GameManager
         if self.active_tab == "SFX":
             self.game.music_vol = self.music_slider.value
             self.game.sfx_vol = self.sfx_slider.value
+        elif self.active_tab == "Difficulty":
+            self.game.start_gap = self.gap_start_slider.value
+            self.game.min_gap = self.gap_min_slider.value
+            self.game.shrink_rate = self.gap_shrink_slider.value
 
     def draw(self, surface):
-        surface.fill((60, 40, 80)) # Dark purple background
+        surface.fill((60, 40, 80)) 
         
         title = self.font_title.render("SETTINGS", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(WIDTH // 2, 100)))
         
         if self.active_tab == "Customize":
             sub_char = self.font_sub.render("Select Character:", True, (200, 200, 200))
-            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 460)))
+            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 440)))
             
             sub_bg = self.font_sub.render("Select Background:", True, (200, 200, 200))
-            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 610)))
-        
+            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 600)))
+            
         for elem in self.ui_elements:
             elem.draw(surface)
 

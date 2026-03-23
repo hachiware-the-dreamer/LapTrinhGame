@@ -57,12 +57,13 @@ class UIButton:
         surface.blit(text_surf, text_rect)
 
 class UISlider:
-    def __init__(self, x, y, width, height, min_val, max_val, start_val, text):
+    def __init__(self, x, y, width, height, min_val, max_val, start_val, text, is_int=False):
         self.rect = pygame.Rect(x, y, width, height)
         self.min_val = min_val
         self.max_val = max_val
         self.value = start_val
         self.text = text
+        self.is_int = is_int
         
         self.font = pygame.font.SysFont(None, 48)
         self.is_dragging = False
@@ -72,6 +73,11 @@ class UISlider:
     def _get_handle_x(self):
         ratio = (self.value - self.min_val) / (self.max_val - self.min_val)
         return int(self.rect.x + ratio * self.rect.width)
+    
+    def set_value(self, new_val):
+        """Programmatically snaps the slider to a new value."""
+        self.value = max(self.min_val, min(new_val, self.max_val))
+        self.handle_x = self._get_handle_x()
 
     def update(self, events):
         mouse_pos = pygame.mouse.get_pos()
@@ -96,16 +102,19 @@ class UISlider:
             self.handle_x = new_x
 
     def draw(self, surface):
-        # Draw Label & Value
-        text_surf = self.font.render(f"{self.text}: {int(self.value * 100)}%", True, (255, 255, 255))
+        # Format text based on flag
+        if self.is_int:
+            display_str = f"{int(self.value)}"
+        else:
+            display_str = f"{int(self.value * 100)}%"
+            
+        text_surf = self.font.render(f"{self.text}: {display_str}", True, (255, 255, 255))
         surface.blit(text_surf, (self.rect.x, self.rect.y - 40))
         
         # Draw Background Track
         pygame.draw.rect(surface, (80, 80, 80), self.rect, border_radius=self.rect.height//2)
-        
         # Draw Filled Track
         fill_rect = pygame.Rect(self.rect.x, self.rect.y, self.handle_x - self.rect.x, self.rect.height)
         pygame.draw.rect(surface, (100, 200, 100), fill_rect, border_radius=self.rect.height//2)
-        
         # Draw Handle
         pygame.draw.circle(surface, (255, 255, 255), (self.handle_x, self.rect.centery), self.handle_radius)

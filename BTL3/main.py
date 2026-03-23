@@ -23,6 +23,11 @@ class GameManager:
         self.music_vol = 1.0
         self.sfx_vol = 1.0
 
+        # Scaling settings
+        self.start_gap = 300.0
+        self.min_gap = 140.0
+        self.shrink_rate = 5.0
+
         self.current_state = GameState.MAIN_MENU
 
         # Core engine blocks
@@ -49,7 +54,7 @@ class GameManager:
         self.player = Player(300, HEIGHT // 2, self.game_mode) 
         self.all_sprites.add(self.player)
         
-        self.spawner = SpawnerManager(self.tunnels, self.score_zones)
+        self.spawner = SpawnerManager(self.tunnels, self.score_zones, self.start_gap, self.min_gap, self.shrink_rate)
         self.score = 0
         self.current_state = GameState.PLAY
 
