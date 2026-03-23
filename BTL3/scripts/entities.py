@@ -38,21 +38,38 @@ class ScoreZone(Entity):
         self.rect = self.image.get_rect(topleft=(x, y))
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, game_mode):
         super().__init__()
         self.image = pygame.Surface((60, 60))
         self.image.fill((255, 255, 0)) 
         self.rect = self.image.get_rect(center=(x, y))
-                
+        
+        self.game_mode = game_mode
+        
         self.velocity_y = 0.0
-        self.gravity = 1620.0        
-        self.flap_power = -720.0    
+        
+        # --- PHYSICS TUNING ---
+        # Flappy mode uses normal gravity and impulse flapping
+        self.flappy_gravity = 1620.0        
+        self.flap_power = -600.0    
+        
+        # Swing mode uses extreme gravity for tight, smooth turnarounds without snapping
+        self.swing_gravity = 1800.0
+        self.gravity_dir = 1.0       
         
         self.animation_timer = 0.0
         self.state = "idle" 
 
     def update(self, dt):
-        self.velocity_y += self.gravity * dt
+        if self.game_mode == "Swing":
+            self.velocity_y += (self.swing_gravity * self.gravity_dir) * dt
+            
+            # Capped terminal velocity -> won't break the sound barrier
+            if self.velocity_y > 550.0: self.velocity_y = 550.0
+            if self.velocity_y < -550.0: self.velocity_y = -550.0
+        else: # Flappy
+            self.velocity_y += self.flappy_gravity * dt
+
         self.rect.y += self.velocity_y * dt
 
         self.animation_timer += dt
@@ -62,7 +79,10 @@ class Player(pygame.sprite.Sprite):
             self.state = "idle/falling"
 
     def flap(self):
-        self.velocity_y = self.flap_power
+        if self.game_mode == "Swing":
+            self.gravity_dir *= -1.0
+        else: # Flappy
+            self.velocity_y = self.flap_power
 
 class SpawnerManager:
     def __init__(self, tunnels_group, score_zones_group):

@@ -16,6 +16,13 @@ class GameManager:
         self.score = 0
         self.font = pygame.font.SysFont(None, 96)
 
+        # Settings state
+        self.game_mode = "Flappy"
+        self.char_idx = 0
+        self.bg_idx = 0
+        self.music_vol = 1.0
+        self.sfx_vol = 1.0
+
         self.current_state = GameState.MAIN_MENU
 
         # Core engine blocks
@@ -39,7 +46,7 @@ class GameManager:
         self.score_zones.empty()
         self.collectibles.empty()
         
-        self.player = Player(300, HEIGHT // 2)
+        self.player = Player(300, HEIGHT // 2, self.game_mode) 
         self.all_sprites.add(self.player)
         
         self.spawner = SpawnerManager(self.tunnels, self.score_zones)
