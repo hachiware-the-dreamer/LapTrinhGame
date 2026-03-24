@@ -11,10 +11,11 @@ class MainMenuScreen:
         center_x = WIDTH // 2 - (btn_w // 2)
         
         self.buttons = [
-            UIButton(center_x, 360, btn_w, btn_h, "Play", self.game.start_game, font_size=64),
-            UIButton(center_x, 490, btn_w, btn_h, "Instructions", self.game.go_to_instructions, font_size=64),
-            UIButton(center_x, 620, btn_w, btn_h, "Settings", self.game.go_to_settings, font_size=64),
-            UIButton(center_x, 750, btn_w, btn_h, "Quit", self.game.quit_game, font_size=64)
+            UIButton(center_x, 320, btn_w, btn_h, "Play", self.game.start_game, font_size=64),
+            UIButton(center_x, 440, btn_w, btn_h, "High Score", self.game.go_to_highscore, font_size=64),
+            UIButton(center_x, 560, btn_w, btn_h, "Instructions", self.game.go_to_instructions, font_size=64),
+            UIButton(center_x, 680, btn_w, btn_h, "Settings", self.game.go_to_settings, font_size=64),
+            UIButton(center_x, 800, btn_w, btn_h, "Quit", self.game.quit_game, font_size=64)
         ]
 
     def update(self, events):
@@ -247,12 +248,12 @@ class GameOverScreen:
         self.font_title = pygame.font.SysFont(None, 96)
         self.font_score = pygame.font.SysFont(None, 96)
         
-        btn_w, btn_h = 400, 100
+        btn_w, btn_h = 520, 100
         center_x = WIDTH // 2 - (btn_w // 2)
         
         self.buttons = [
             UIButton(center_x, 560, btn_w, btn_h, "Retry", self.game.start_game, font_size=64),
-            UIButton(center_x, 690, btn_w, btn_h, "Back to Menu", self.game.go_to_menu, font_size=64)
+            UIButton(center_x, 690, btn_w, btn_h, "Back to Menu", self.game.go_to_menu, font_size=56)
         ]
 
     def update(self, events):
@@ -268,5 +269,38 @@ class GameOverScreen:
         score_surf = self.font_score.render(f"Final Score: {self.game.score}", True, (255, 255, 255))
         surface.blit(score_surf, score_surf.get_rect(center=(WIDTH // 2, 440)))
         
+        for btn in self.buttons:
+            btn.draw(surface)
+
+
+class HighScoreScreen:
+    def __init__(self, game):
+        self.game = game
+        self.font_title = pygame.font.SysFont(None, 110)
+        self.font_score = pygame.font.SysFont(None, 180)
+        self.font_sub = pygame.font.SysFont(None, 56)
+
+        btn_w, btn_h = 400, 100
+        center_x = WIDTH // 2 - (btn_w // 2)
+        self.buttons = [
+            UIButton(center_x, 820, btn_w, btn_h, "Back", self.game.go_to_menu, font_size=64)
+        ]
+
+    def update(self, events):
+        for btn in self.buttons:
+            btn.update(events)
+
+    def draw(self, surface):
+        surface.fill((35, 28, 16))
+
+        title = self.font_title.render("HIGH SCORE", True, (255, 215, 0))
+        surface.blit(title, title.get_rect(center=(WIDTH // 2, 220)))
+
+        label = self.font_sub.render("Best Run", True, (220, 220, 220))
+        surface.blit(label, label.get_rect(center=(WIDTH // 2, 370)))
+
+        score = self.font_score.render(str(self.game.high_score), True, (255, 255, 255))
+        surface.blit(score, score.get_rect(center=(WIDTH // 2, 560)))
+
         for btn in self.buttons:
             btn.draw(surface)

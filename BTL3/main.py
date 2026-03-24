@@ -3,7 +3,7 @@ import sys
 from scripts.settings import GameState, WIDTH, HEIGHT, FPS
 from scripts.background import ParallaxBackground, ParallaxSeaView, ParallaxForest
 from scripts.entities import Player, SpawnerManager
-from scripts.screens import MainMenuScreen, PauseScreen, GameOverScreen, InstructionsScreen, SettingsScreen
+from scripts.screens import MainMenuScreen, PauseScreen, GameOverScreen, InstructionsScreen, SettingsScreen, HighScoreScreen
 
 class GameManager:
     def __init__(self):
@@ -14,6 +14,7 @@ class GameManager:
         self.running = True
         
         self.score = 0
+        self.high_score = self.load_high_score()
         self.font = pygame.font.SysFont(None, 96)
 
         # Settings state
@@ -30,9 +31,11 @@ class GameManager:
         # SFX
         try:
             self.sfx_die = pygame.mixer.Sound("assets/sfx/die.mp3")
+            self.sfx_coin = pygame.mixer.Sound("assets/sfx/coin_pickup.mp3")
         except pygame.error:
             print("Warning: Could not find sound file at assets/sfx/die.mp3")
             self.sfx_die = None
+            self.sfx_coin = None
 
         # Scaling settings
         self.start_gap = 300.0
@@ -54,6 +57,7 @@ class GameManager:
         self.game_over_screen = GameOverScreen(self)
         self.instructions_screen = InstructionsScreen(self)
         self.settings_screen = SettingsScreen(self)
+        self.high_score_screen = HighScoreScreen(self)
 
     def _create_background(self, idx):
         # idx 0 -> bg1, idx 1 -> bg2, idx 2 -> bg3
@@ -95,6 +99,28 @@ class GameManager:
                 
         pygame.mixer.music.set_volume(self.current_music_vol)
 
+    def load_high_score(self):
+        try:
+            with open("highscore.txt", "r", encoding="utf-8") as file:
+                return int(file.read())
+        except (FileNotFoundError, ValueError):
+            return 0
+
+    def save_high_score(self):
+        with open("highscore.txt", "w", encoding="utf-8") as file:
+            file.write(str(self.high_score))
+
+    def update_high_score(self):
+        if self.score > self.high_score:
+            self.high_score = self.score
+            self.save_high_score()
+
+    def play_sfx(self, sound):
+        if sound is None:
+            return
+        sound.set_volume(self.sfx_vol)
+        sound.play()
+
     # --- STATE TRANSITIONS ---
     def start_game(self):
         self.all_sprites.empty()
@@ -105,7 +131,7 @@ class GameManager:
         self.player = Player(300, HEIGHT // 2, self.game_mode) 
         self.all_sprites.add(self.player)
         
-        self.spawner = SpawnerManager(self.tunnels, self.score_zones, self.start_gap, self.min_gap, self.shrink_rate)
+        self.spawner = SpawnerManager(self.tunnels, self.score_zones, self.collectibles, self.start_gap, self.min_gap, self.shrink_rate)
         self.score = 0
 
         if self.current_state == GameState.MAIN_MENU:
@@ -128,9 +154,8 @@ class GameManager:
 
     def end_game(self):
         if self.current_state == GameState.PLAY:
-            if self.sfx_die:
-                self.sfx_die.set_volume(self.sfx_vol) # Sync with the Settings slider
-                self.sfx_die.play()
+            self.update_high_score()
+            self.play_sfx(self.sfx_die)
         
         self.current_state = GameState.GAME_OVER
         self.update_music_volume()
@@ -144,6 +169,9 @@ class GameManager:
 
     def go_to_settings(self):
         self.current_state = GameState.SETTINGS
+
+    def go_to_highscore(self):
+        self.current_state = GameState.HIGH_SCORE
 
     def quit_game(self):
         self.running = False
@@ -172,6 +200,8 @@ class GameManager:
                 self.instructions_screen.update(events)
             elif self.current_state == GameState.SETTINGS:
                 self.settings_screen.update(events)
+            elif self.current_state == GameState.HIGH_SCORE:
+                self.high_score_screen.update(events)
 
             # Draw
             self.screen.fill((0, 0, 0))
@@ -189,6 +219,8 @@ class GameManager:
                 self.instructions_screen.draw(self.screen)
             elif self.current_state == GameState.SETTINGS:
                 self.settings_screen.draw(self.screen)
+            elif self.current_state == GameState.HIGH_SCORE:
+                self.high_score_screen.draw(self.screen)
 
             pygame.display.flip()
             
@@ -213,6 +245,7 @@ class GameManager:
         self.all_sprites.update(dt)
         self.tunnels.update(dt)
         self.score_zones.update(dt)
+        self.collectibles.update(dt)
 
         # --- CEILING AND GROUND COLLISION ---
         if self.player.rect.top <= 0 or self.player.rect.bottom >= HEIGHT:
@@ -227,10 +260,17 @@ class GameManager:
             self.score += 1
             # Optional: Add a sound effect trigger right here later!
 
+        collected_coins = pygame.sprite.spritecollide(self.player, self.collectibles, True)
+        if collected_coins:
+            self.play_sfx(self.sfx_coin)
+            for coin in collected_coins:
+                self.score += coin.points
+
     def _draw_play(self):
         self.background.draw(self.screen)
         self.tunnels.draw(self.screen)
         self.all_sprites.draw(self.screen)
+        self.collectibles.draw(self.screen)
 
         # UI HUD
         score_surf = self.font.render(f"Score: {self.score}", True, (255, 255, 255))

@@ -1,6 +1,7 @@
 import pygame
 import random
 from scripts.settings import WIDTH, HEIGHT
+from scripts.coin_anim import CoinAnimation
 
 class Entity(pygame.sprite.Sprite):
     def __init__(self, x, y, speed_x, image=None):
@@ -19,7 +20,27 @@ class Obstacle(Entity):
     pass
 
 class Collectible(Entity):
-    pass
+    def __init__(self, x, y, speed_x, size=(48, 48), points=1):
+        super().__init__(x, y, speed_x)
+        self.points = points
+        self.anim = CoinAnimation("assets/sprites/coin/1.png", size=size)
+        self.image = self.anim.get_image()
+        self.rect = self.image.get_rect(topleft=(x, y))
+
+    def update(self, dt):
+        super().update(dt)
+        self.anim.update(dt)
+        self.image = self.anim.get_image()
+
+
+class SmallCoin(Collectible):
+    def __init__(self, x, y, speed_x):
+        super().__init__(x, y, speed_x, size=(48, 48), points=2)
+
+
+class BigCoin(Collectible):
+    def __init__(self, x, y, speed_x):
+        super().__init__(x, y, speed_x, size=(88, 88), points=5)
 
 class TunnelPart(Entity):
     def __init__(self, x, y, width, height, speed_x, base_image=None, is_cap=False, point_down=False, overlap=0):
@@ -118,9 +139,10 @@ class Player(pygame.sprite.Sprite):
             self.velocity_y = self.flap_power
 
 class SpawnerManager:
-    def __init__(self, tunnels_group, score_zones_group, start_gap, min_gap, shrink_rate):
+    def __init__(self, tunnels_group, score_zones_group, collectibles_group, start_gap, min_gap, shrink_rate):
         self.tunnels_group = tunnels_group
         self.score_zones_group = score_zones_group
+        self.collectibles_group = collectibles_group
         self.spawn_timer = 0.0
         
         # Difficulty scaling settings
@@ -132,7 +154,7 @@ class SpawnerManager:
 
         # Mixi food jar
         try:
-            raw_img = pygame.image.load("assets\obstacles\Aile_0040.png").convert_alpha()
+            raw_img = pygame.image.load("assets/obstacles/Aile_0040.png").convert_alpha()
             
             # 1. Find the smallest box that contains the actual visible pixels
             bbox = raw_img.get_bounding_rect() 
@@ -141,7 +163,7 @@ class SpawnerManager:
             self.tunnel_img = raw_img.subsurface(bbox).copy()
             
         except pygame.error:
-            print("Warning: Could not load assets\obstacles\ ")
+            print("Warning: Could not load assets/obstacles/Aile_0040.png")
             self.tunnel_img = None
         
     def update(self, dt):
@@ -202,3 +224,21 @@ class SpawnerManager:
         if self.tunnels_spawned > 3: 
             if self.current_gap_size > self.min_gap_size:
                 self.current_gap_size -= self.gap_shrink_rate
+
+        # Spawn coins in the gap.
+        # 60% small coin, 20% big coin, 20% none.
+        rand_val = random.random()
+        if rand_val < 0.8:
+            if rand_val < 0.2:
+                side = random.choice(["top", "bottom"])
+                if side == "top":
+                    coin_y = gap_y + 10
+                else:
+                    coin_y = gap_y + gap_size - 98
+                coin = BigCoin(x_pos + cap_w + 10, coin_y, speed)
+            else:
+                coin_y = gap_y + random.randint(24, max(25, gap_size - 86))
+                coin = SmallCoin(x_pos + cap_w + 30, coin_y, speed)
+
+            if self.collectibles_group is not None:
+                self.collectibles_group.add(coin)
