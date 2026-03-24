@@ -1,5 +1,6 @@
 import pygame
 
+
 class SpriteSheetManager:
     def __init__(self, filename):
         try:
@@ -13,7 +14,7 @@ class SpriteSheetManager:
             image = pygame.Surface((width, height))
             image.fill((255, 0, 255))
             return image
-            
+
         image = pygame.Surface((width, height), pygame.SRCALPHA)
         image.blit(self.sheet, (0, 0), (x, y, width, height))
         return image
@@ -24,18 +25,18 @@ class UIButton:
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
         self.callback = callback
-        
+
         self.font = pygame.font.SysFont("Segoe UI", font_size, bold=True)
         self.base_color = pygame.Color(*color)
-        
+
         # Safer color calculation to avoid wrap-around
         h, s, l, a = self.base_color.hsla
         self.hover_color = pygame.Color(0, 0, 0)
         self.hover_color.hsla = (h, s, min(100, l + 10), a)
-        
+
         self.active_color = pygame.Color(50, 200, 50)
         self.text_color = (255, 255, 255)
-        
+
         self.is_hovered = False
         self.is_active = False
         self.animation_scale = 1.0
@@ -44,7 +45,7 @@ class UIButton:
     def update(self, events):
         mouse_pos = pygame.mouse.get_pos()
         self.is_hovered = self.rect.collidepoint(mouse_pos)
-        
+
         self.target_scale = 1.05 if self.is_hovered else 1.0
         # Smooth scaling animation
         self.animation_scale += (self.target_scale - self.animation_scale) * 0.15
@@ -69,22 +70,28 @@ class UIButton:
 
         # Dynamic color based on state
         current_color = self.active_color if self.is_active else (self.hover_color if self.is_hovered else self.base_color)
-        
+
         # Draw main button body
         pygame.draw.rect(surface, current_color, draw_rect, border_radius=15)
-        
+
         # Highlight top half for 3D look
         highlight_surface = pygame.Surface((draw_rect.width, draw_rect.height // 2), pygame.SRCALPHA)
-        pygame.draw.rect(highlight_surface, (255, 255, 255, 40), (0, 0, draw_rect.width, draw_rect.height // 2), 
-                         border_top_left_radius=15, border_top_right_radius=15)
+        pygame.draw.rect(
+            highlight_surface,
+            (255, 255, 255, 40),
+            (0, 0, draw_rect.width, draw_rect.height // 2),
+            border_top_left_radius=15,
+            border_top_right_radius=15,
+        )
         surface.blit(highlight_surface, (draw_rect.x, draw_rect.y))
 
         # Draw border
         pygame.draw.rect(surface, (255, 255, 255, 100), draw_rect, width=2, border_radius=15)
-        
+
         text_surf = self.font.render(self.text, True, self.text_color)
         text_rect = text_surf.get_rect(center=draw_rect.center)
         surface.blit(text_surf, text_rect)
+
 
 class UISlider:
     def __init__(self, x, y, width, height, min_val, max_val, start_val, text, is_int=False):
@@ -94,7 +101,7 @@ class UISlider:
         self.value = start_val
         self.text = text
         self.is_int = is_int
-        
+
         self.font = pygame.font.SysFont("Segoe UI", 36, bold=True)
         self.is_dragging = False
         self.handle_radius = height // 2 + 10
@@ -102,7 +109,8 @@ class UISlider:
 
     def _get_handle_x(self):
         val_range = self.max_val - self.min_val
-        if val_range == 0: return self.rect.x
+        if val_range == 0:
+            return self.rect.x
         ratio = (self.value - self.min_val) / val_range
         return int(self.rect.x + ratio * self.rect.width)
 
@@ -144,10 +152,10 @@ class UISlider:
         surface.blit(text_surf, (self.rect.x, self.rect.y - 40))
 
         # Draw Background Track
-        pygame.draw.rect(surface, (60, 60, 60), self.rect, border_radius=self.rect.height//2)
+        pygame.draw.rect(surface, (60, 60, 60), self.rect, border_radius=self.rect.height // 2)
         # Draw Filled Track
         fill_rect = pygame.Rect(self.rect.x, self.rect.y, self.handle_x - self.rect.x, self.rect.height)
-        pygame.draw.rect(surface, (70, 130, 180), fill_rect, border_radius=self.rect.height//2)
+        pygame.draw.rect(surface, (70, 130, 180), fill_rect, border_radius=self.rect.height // 2)
 
         # Draw Handle with glow if dragging
         handle_color = (255, 255, 255) if not self.is_dragging else (200, 230, 255)
