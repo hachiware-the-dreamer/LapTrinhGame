@@ -7,6 +7,7 @@ class GameState(Enum):
     GAME_OVER = auto()
     INSTRUCTIONS = auto()
     SETTINGS = auto()
+    HIGH_SCORE = auto()
 
 # Screen settings
 WIDTH, HEIGHT = 1920, 1080
