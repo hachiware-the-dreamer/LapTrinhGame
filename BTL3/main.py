@@ -28,7 +28,7 @@ class GameManager:
         self.running = True
 
         self.score = 0
-        self.font = pygame.font.SysFont(None, 96)
+        self.hud_font = pygame.font.Font(None, 72)
 
         # Settings state
         self.game_mode = "Flappy"
@@ -45,12 +45,12 @@ class GameManager:
 
         # SFX
         try:
-            self.sfx_die = pygame.mixer.Sound("assets/sfx/die.mp3")
-            self.sfx_coin = pygame.mixer.Sound("assets/sfx/coin_pickup.mp3")
+            self.sfx_die = pygame.mixer.Sound("assets/sfx/die_mixi.mp3")
+            self.sfx_coin = pygame.mixer.Sound("assets/sfx/coin_pickup_mixi.mp3")
             self.sfx_flap = pygame.mixer.Sound("assets/sfx/flap.mp3")
             self.sfx_swing = pygame.mixer.Sound("assets/sfx/swing.mp3")
         except pygame.error:
-            print("Warning: Could not find some sound files in assets/sfx/")
+            print("Warning: Could not find sound file at assets/sfx/die_mixi.mp3")
             self.sfx_die = None
             self.sfx_coin = None
             self.sfx_flap = None
@@ -228,10 +228,10 @@ class GameManager:
 
         if self.current_state == GameState.MAIN_MENU:
             try:
-                pygame.mixer.music.load("assets/musics/bgm.mp3")
+                pygame.mixer.music.load("assets/musics/bgm_mixi.mp3") 
                 pygame.mixer.music.play(loops=-1)
             except pygame.error:
-                print("Warning: Could not find music file at assets/musics/bgm.mp3")
+                print("Warning: Could not find music file at assets/musics/bgm_mixi.mp3")
 
         self.current_state = GameState.PLAY
         self.update_music_volume()  # Restores full volume if we clicked "Retry" from Game Over
@@ -371,8 +371,16 @@ class GameManager:
         self.collectibles.draw(self.screen)
 
         # UI HUD
-        score_surf = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
-        self.screen.blit(score_surf, (40, 40))
+        score_text = f"SCORE: {int(self.score)}"
+        score_surf = self.hud_font.render(score_text, True, (255, 235, 59))
+        outline_surf = self.hud_font.render(score_text, True, (0, 0, 0))
+
+        x, y = 32, 28
+        self.screen.blit(outline_surf, (x - 2, y))
+        self.screen.blit(outline_surf, (x + 2, y))
+        self.screen.blit(outline_surf, (x, y - 2))
+        self.screen.blit(outline_surf, (x, y + 2))
+        self.screen.blit(score_surf, (x, y))
 
 
 if __name__ == "__main__":
