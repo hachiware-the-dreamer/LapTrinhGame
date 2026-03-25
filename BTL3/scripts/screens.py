@@ -7,6 +7,12 @@ class MainMenuScreen:
     def __init__(self, game):
         self.game = game
         self.font = pygame.font.SysFont(None, 96)
+        
+        try:
+            raw_bg = pygame.image.load("assets/backgrounds/bg1/landscape.png").convert_alpha()
+            self.bg_image = pygame.transform.scale(raw_bg, (WIDTH, HEIGHT))
+        except (pygame.error, FileNotFoundError):
+            self.bg_image = None
 
         btn_w, btn_h = 400, 100
         center_x = WIDTH // 2 - (btn_w // 2)
@@ -52,7 +58,15 @@ class MainMenuScreen:
             btn.update(events)
 
     def draw(self, surface):
-        surface.fill((50, 50, 50))
+        if self.bg_image:
+            surface.blit(self.bg_image, (0, 0))
+            # Optional semi-transparent overlay to make buttons readable
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 100))
+            surface.blit(overlay, (0, 0))
+        else:
+            surface.fill((50, 50, 50))
+            
         title = self.font.render("INFINITE FLYER", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(WIDTH // 2, 200)))
         for btn in self.buttons:
@@ -64,6 +78,12 @@ class InstructionsScreen:
         self.game = game
         self.font_title = pygame.font.SysFont(None, 96)
         self.font_text = pygame.font.SysFont(None, 48)
+
+        try:
+            raw_bg = pygame.image.load("assets/backgrounds/bg1/landscape.png").convert_alpha()
+            self.bg_image = pygame.transform.scale(raw_bg, (WIDTH, HEIGHT))
+        except (pygame.error, FileNotFoundError):
+            self.bg_image = None
 
         btn_w, btn_h = 400, 100
         center_x = WIDTH // 2 - (btn_w // 2)
@@ -89,7 +109,13 @@ class InstructionsScreen:
             btn.update(events)
 
     def draw(self, surface):
-        surface.fill((40, 60, 80))  # A nice dark blueish background
+        if self.bg_image:
+            surface.blit(self.bg_image, (0, 0))
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 150)) # slightly darker overlay for reading text
+            surface.blit(overlay, (0, 0))
+        else:
+            surface.fill((40, 60, 80))  # A nice dark blueish background
 
         title = self.font_title.render("INSTRUCTIONS", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(WIDTH // 2, 150)))
@@ -116,6 +142,12 @@ class SettingsScreen:
         self.font_sub = pygame.font.SysFont(None, 64)
 
         self.active_tab = "Customize"
+        
+        try:
+            raw_bg = pygame.image.load("assets/backgrounds/bg1/landscape.png").convert_alpha()
+            self.bg_image = pygame.transform.scale(raw_bg, (WIDTH, HEIGHT))
+        except (pygame.error, FileNotFoundError):
+            self.bg_image = None
         
         # Preload characters for previews
         self.char_images = []
@@ -402,7 +434,13 @@ class SettingsScreen:
                 self.build_ui()
 
     def draw(self, surface):
-        surface.fill((60, 40, 80))
+        if self.bg_image:
+            surface.blit(self.bg_image, (0, 0))
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 150))
+            surface.blit(overlay, (0, 0))
+        else:
+            surface.fill((60, 40, 80))
 
         title = self.font_title.render("SETTINGS", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(WIDTH // 2, 100)))
@@ -444,7 +482,7 @@ class SettingsScreen:
                 f"Current: {self.game.selected_difficulty}", True, (220, 220, 220)
             )
             surface.blit(
-                current_label, current_label.get_rect(center=(WIDTH // 2, 800))
+                current_label, current_label.get_rect(center=(WIDTH // 2, 880))
             )
 
 
