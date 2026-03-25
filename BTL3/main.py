@@ -47,10 +47,14 @@ class GameManager:
         try:
             self.sfx_die = pygame.mixer.Sound("assets/sfx/die.mp3")
             self.sfx_coin = pygame.mixer.Sound("assets/sfx/coin_pickup.mp3")
+            self.sfx_flap = pygame.mixer.Sound("assets/sfx/flap.mp3")
+            self.sfx_swing = pygame.mixer.Sound("assets/sfx/swing.mp3")
         except pygame.error:
-            print("Warning: Could not find sound file at assets/sfx/die.mp3")
+            print("Warning: Could not find some sound files in assets/sfx/")
             self.sfx_die = None
             self.sfx_coin = None
+            self.sfx_flap = None
+            self.sfx_swing = None
 
         # Scaling settings
         self.apply_difficulty_preset(self.selected_difficulty)
@@ -209,7 +213,7 @@ class GameManager:
         self.score_zones.empty()
         self.collectibles.empty()
 
-        self.player = Player(300, HEIGHT // 2, self.game_mode)
+        self.player = Player(300, HEIGHT // 2, self.game_mode, self.char_idx)
         self.all_sprites.add(self.player)
 
         self.spawner = SpawnerManager(
@@ -323,12 +327,14 @@ class GameManager:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     self.player.flap()
+                    self.play_sfx(self.sfx_swing if self.game_mode == "Swing" else self.sfx_flap)
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
                     self.toggle_pause()
 
             # --- MOUSE CLICK TO FLAP ---
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self.player.flap()
+                self.play_sfx(self.sfx_swing if self.game_mode == "Swing" else self.sfx_flap)
 
         self.background.update(dt)
         self.spawner.update(dt)

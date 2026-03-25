@@ -116,11 +116,58 @@ class SettingsScreen:
         self.font_sub = pygame.font.SysFont(None, 64)
 
         self.active_tab = "Customize"
+        
+        # Preload characters for previews
+        self.char_images = []
+        char_paths = ["assets/sprites/bird1.png", "assets/sprites/bird2.png", "assets/sprites/helicopter.png"]
+        for idx, path in enumerate(char_paths):
+            try:
+                img = pygame.image.load(path).convert_alpha()
+                self.char_images.append(pygame.transform.scale(img, (100, 75)))
+            except (pygame.error, FileNotFoundError):
+                surf = pygame.Surface((100, 75))
+                if idx == 0: surf.fill((255, 255, 0))
+                elif idx == 1: surf.fill((255, 0, 0))
+                else: surf.fill((0, 0, 255))
+                self.char_images.append(surf)
+
+        # Pre-load backgrounds for previews (Scale them down significantly)
+        self.bg_previews = []
+        bg_paths = ["assets/backgrounds/bg1/parts/bg_01.png", "assets/backgrounds/bg2/background.png", "assets/backgrounds/bg3/parallax_background_forest.png"]
+        
+        # Preload tunnel image for preview
+        try:
+            raw_tunnel_img = pygame.image.load("assets/obstacles/Aile_0040.png").convert_alpha()
+            bbox = raw_tunnel_img.get_bounding_rect()
+            cropped_tunnel = raw_tunnel_img.subsurface(bbox).copy()
+            # Scale down tunnel for the preview
+            tunnel_preview = pygame.transform.scale(cropped_tunnel, (30, 100))
+        except (pygame.error, FileNotFoundError):
+            tunnel_preview = pygame.Surface((30, 100))
+            tunnel_preview.fill((0, 255, 0))
+
+        for idx, path in enumerate(bg_paths):
+            preview_surf = pygame.Surface((250, 140))
+            try:
+                # Need to gracefully handle actual files if they exist
+                img = pygame.image.load(path).convert_alpha()
+                scaled_img = pygame.transform.scale(img, (250, 140))
+                preview_surf.blit(scaled_img, (0, 0))
+            except (pygame.error, FileNotFoundError):
+                if idx == 0: preview_surf.fill((50, 100, 150))
+                elif idx == 1: preview_surf.fill((0, 200, 255))
+                else: preview_surf.fill((30, 100, 50))
+            
+            # Draw sample tunnels onto the background preview
+            preview_surf.blit(tunnel_preview, (50, 80)) # Bottom tunnel
+            preview_surf.blit(pygame.transform.flip(tunnel_preview, False, True), (150, -40)) # Top tunnel
+            
+            self.bg_previews.append(preview_surf)
 
         # --- AUDIO SLIDERS ---
         self.music_slider = UISlider(
             WIDTH // 2 - 250,
-            400,
+            450,
             500,
             20,
             0.0,
@@ -129,13 +176,13 @@ class SettingsScreen:
             "Music Volume",
         )
         self.sfx_slider = UISlider(
-            WIDTH // 2 - 250, 600, 500, 20, 0.0, 1.0, self.game.sfx_vol, "SFX Volume"
+            WIDTH // 2 - 250, 650, 500, 20, 0.0, 1.0, self.game.sfx_vol, "SFX Volume"
         )
 
         # --- DIFFICULTY SLIDERS ---
         self.gap_start_slider = UISlider(
             WIDTH // 2 - 250,
-            450,
+            480,
             500,
             20,
             150.0,
@@ -146,7 +193,7 @@ class SettingsScreen:
         )
         self.gap_min_slider = UISlider(
             WIDTH // 2 - 250,
-            580,
+            630,
             500,
             20,
             80.0,
@@ -157,7 +204,7 @@ class SettingsScreen:
         )
         self.gap_shrink_slider = UISlider(
             WIDTH // 2 - 250,
-            710,
+            780,
             500,
             20,
             0.0,
@@ -236,23 +283,25 @@ class SettingsScreen:
         if self.active_tab == "Customize":
             btn_mode = UIButton(
                 center_x - 200,
-                330,
+                300,
                 400,
-                80,
+                60,
                 f"Mode: {self.game.game_mode}",
                 self.toggle_mode,
                 font_size=56,
             )
             self.ui_elements.append(btn_mode)
 
-            char_prefix = "Bird" if self.game.game_mode == "Flappy" else "Copter"
             for i in range(3):
+                # Calculate coordinates for character icons
+                char_x = center_x - 420 + (i * 280) + 125  # Center of the button
+                
                 btn_char = UIButton(
                     center_x - 420 + (i * 280),
-                    480,
+                    530,
                     250,
-                    80,
-                    f"{char_prefix} {i+1}",
+                    60,
+                    f"Char {i+1}",
                     lambda idx=i: self.select_char(idx),
                     font_size=48,
                 )
@@ -267,9 +316,9 @@ class SettingsScreen:
             for i, (idx, label) in enumerate(bg_options):
                 btn_bg = UIButton(
                     center_x - 420 + (i * 280),
-                    650,
+                    820,
                     250,
-                    80,
+                    60,
                     label,
                     lambda value=idx: self.select_bg(value),
                     font_size=48,
@@ -331,7 +380,7 @@ class SettingsScreen:
 
         self.ui_elements.append(
             UIButton(
-                center_x - 200, 850, 400, 80, "Back", self.game.go_to_menu, font_size=56
+                center_x - 200, 960, 400, 80, "Back", self.game.go_to_menu, font_size=56
             )
         )
 
@@ -360,10 +409,32 @@ class SettingsScreen:
 
         if self.active_tab == "Customize":
             sub_char = self.font_sub.render("Select Character:", True, (200, 200, 200))
-            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 440)))
+            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 400)))
+
+            # Draw Character Previews
+            for i in range(3):
+                char_x = WIDTH // 2 - 420 + (i * 280) + 125
+                char_y = 470
+                rect = self.char_images[i].get_rect(center=(char_x, char_y))
+                # Add highlighting if selected
+                if self.game.char_idx == i:
+                    pygame.draw.rect(surface, (255, 215, 0), rect.inflate(10, 10), 4, border_radius=5)
+                surface.blit(self.char_images[i], rect)
 
             sub_bg = self.font_sub.render("Select Background:", True, (200, 200, 200))
-            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 600)))
+            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 640)))
+
+            # Draw Background Previews
+            for i in range(3):
+                bg_x = WIDTH // 2 - 420 + (i * 280) + 125
+                bg_y = 740
+                rect = self.bg_previews[i].get_rect(center=(bg_x, bg_y))
+                # Add highlighting if selected
+                if self.game.bg_idx == i:
+                    pygame.draw.rect(surface, (255, 215, 0), rect.inflate(10, 10), 4, border_radius=5)
+                else:
+                    pygame.draw.rect(surface, (200, 200, 200), rect.inflate(4, 4), 2)
+                surface.blit(self.bg_previews[i], rect)
 
         for elem in self.ui_elements:
             elem.draw(surface)

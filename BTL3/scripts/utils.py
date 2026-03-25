@@ -149,7 +149,7 @@ class UISlider:
             display_str = f"{int(self.value * 100)}%"
 
         text_surf = self.font.render(f"{self.text}: {display_str}", True, (255, 255, 255))
-        surface.blit(text_surf, (self.rect.x, self.rect.y - 40))
+        surface.blit(text_surf, (self.rect.x, self.rect.y - 50))
 
         # Draw Background Track
         pygame.draw.rect(surface, (60, 60, 60), self.rect, border_radius=self.rect.height // 2)

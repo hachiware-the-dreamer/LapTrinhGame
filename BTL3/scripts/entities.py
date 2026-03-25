@@ -92,13 +92,35 @@ class ScoreZone(Entity):
         self.rect = self.image.get_rect(topleft=(x, y))
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y, game_mode):
+    def __init__(self, x, y, game_mode, char_idx=0):
         super().__init__()
-        self.image = pygame.Surface((60, 60))
-        self.image.fill((255, 255, 0)) 
-        self.rect = self.image.get_rect(center=(x, y))
         
         self.game_mode = game_mode
+        self.char_idx = char_idx
+        
+        # Determine the image path based on the selected character index
+        if self.char_idx == 0:
+            img_path = "assets/sprites/bird1.png"
+        elif self.char_idx == 1:
+            img_path = "assets/sprites/bird2.png"
+        else: # self.char_idx == 2
+            img_path = "assets/sprites/helicopter.png"
+            
+        try:
+            # Load the image and scale it if necessary
+            raw_img = pygame.image.load(img_path).convert_alpha()
+            self.image = pygame.transform.scale(raw_img, (60, 45)) # Adjust size as needed
+        except (pygame.error, FileNotFoundError):
+            print(f"Warning: Could not load {img_path}. Using placeholder.")
+            self.image = pygame.Surface((60, 60))
+            if self.char_idx == 0:
+                self.image.fill((255, 255, 0)) # Yellow for Bird 1
+            elif self.char_idx == 1:
+                self.image.fill((255, 0, 0))   # Red for Bird 2
+            else:
+                self.image.fill((0, 0, 255))   # Blue for Helicopter
+                
+        self.rect = self.image.get_rect(center=(x, y))
         
         self.velocity_y = 0.0
         
