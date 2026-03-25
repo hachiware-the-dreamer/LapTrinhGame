@@ -1,5 +1,5 @@
 import pygame
-from scripts.settings import WIDTH, HEIGHT
+from scripts.settings import WIDTH, HEIGHT, DIFFICULTY_PRESETS
 from scripts.utils import UIButton, UISlider
 
 class MainMenuScreen:
@@ -95,22 +95,11 @@ class SettingsScreen:
 
     def apply_preset(self, preset_name):
         """Snaps the sliders to predefined hardcore/casual settings."""
-        if preset_name == "Easy":
-            self.gap_start_slider.set_value(400.0)
-            self.gap_min_slider.set_value(200.0)
-            self.gap_shrink_slider.set_value(2.0)
-        elif preset_name == "Medium":
-            self.gap_start_slider.set_value(300.0)
-            self.gap_min_slider.set_value(140.0)
-            self.gap_shrink_slider.set_value(5.0)
-        elif preset_name == "Hard":
-            self.gap_start_slider.set_value(250.0)
-            self.gap_min_slider.set_value(100.0)
-            self.gap_shrink_slider.set_value(10.0)
-        elif preset_name == "Asian":
-            self.gap_start_slider.set_value(150.0)
-            self.gap_min_slider.set_value(80.0)
-            self.gap_shrink_slider.set_value(30.0)
+        self.game.apply_difficulty_preset(preset_name)
+        self.gap_start_slider.set_value(self.game.start_gap)
+        self.gap_min_slider.set_value(self.game.min_gap)
+        self.gap_shrink_slider.set_value(self.game.shrink_rate)
+        self.build_ui()
 
     def set_tab(self, tab_name):
         self.active_tab = tab_name
@@ -169,7 +158,12 @@ class SettingsScreen:
             btn_med = UIButton(center_x - 215, 310, 200, 60, "Medium", lambda: self.apply_preset("Medium"), font_size=40)
             btn_hard = UIButton(center_x + 5, 310, 200, 60, "Hard", lambda: self.apply_preset("Hard"), font_size=40)
             btn_asian = UIButton(center_x + 225, 310, 200, 60, "Asian", lambda: self.apply_preset("Asian"), font_size=40)
-            
+
+            btn_easy.is_active = (self.game.selected_difficulty == "Easy")
+            btn_med.is_active = (self.game.selected_difficulty == "Medium")
+            btn_hard.is_active = (self.game.selected_difficulty == "Hard")
+            btn_asian.is_active = (self.game.selected_difficulty == "Asian")
+
             self.ui_elements.extend([btn_easy, btn_med, btn_hard, btn_asian])
             self.ui_elements.extend([self.gap_start_slider, self.gap_min_slider, self.gap_shrink_slider])
 
@@ -190,6 +184,10 @@ class SettingsScreen:
             self.game.start_gap = self.gap_start_slider.value
             self.game.min_gap = self.gap_min_slider.value
             self.game.shrink_rate = self.gap_shrink_slider.value
+            previous_difficulty = self.game.selected_difficulty
+            self.game.sync_selected_difficulty()
+            if previous_difficulty != self.game.selected_difficulty:
+                self.build_ui()
 
     def draw(self, surface):
         surface.fill((60, 40, 80)) 
@@ -206,6 +204,10 @@ class SettingsScreen:
             
         for elem in self.ui_elements:
             elem.draw(surface)
+
+        if self.active_tab == "Difficulty":
+            current_label = self.font_sub.render(f"Current: {self.game.selected_difficulty}", True, (220, 220, 220))
+            surface.blit(current_label, current_label.get_rect(center=(WIDTH // 2, 800)))
 
 class PauseScreen:
     def __init__(self, game):
@@ -276,9 +278,15 @@ class GameOverScreen:
 class HighScoreScreen:
     def __init__(self, game):
         self.game = game
-        self.font_title = pygame.font.SysFont(None, 110)
-        self.font_score = pygame.font.SysFont(None, 180)
-        self.font_sub = pygame.font.SysFont(None, 56)
+        self.font_title = pygame.font.SysFont(None, 96)
+        self.font_sub = pygame.font.SysFont(None, 52)
+        self.font_label = pygame.font.SysFont("Segoe UI", 42, bold=True)
+        self.font_score = pygame.font.SysFont("Segoe UI", 180, bold=True)
+        self.font_hint = pygame.font.SysFont("Segoe UI", 34, bold=True)
+        self.selected_view = self.game.selected_difficulty
+
+        self.difficulty_buttons = []
+        self.build_ui()
 
         btn_w, btn_h = 400, 100
         center_x = WIDTH // 2 - (btn_w // 2)
@@ -286,21 +294,74 @@ class HighScoreScreen:
             UIButton(center_x, 820, btn_w, btn_h, "Back", self.game.go_to_menu, font_size=64)
         ]
 
+    def select_difficulty(self, difficulty):
+        self.selected_view = difficulty
+        self.build_ui()
+
+    def build_ui(self):
+        self.difficulty_buttons.clear()
+        difficulties = list(DIFFICULTY_PRESETS.keys()) + ["Custom"]
+        btn_w, btn_h = 210, 70
+        start_x = WIDTH // 2 - 545
+        for index, difficulty in enumerate(difficulties):
+            button = UIButton(
+                start_x + (index * 220),
+                300,
+                btn_w,
+                btn_h,
+                difficulty,
+                lambda value=difficulty: self.select_difficulty(value),
+                font_size=34,
+            )
+            button.is_active = (difficulty == self.selected_view)
+            self.difficulty_buttons.append(button)
+
     def update(self, events):
+        if self.selected_view != self.game.selected_difficulty and self.selected_view not in self.game.high_scores:
+            self.selected_view = self.game.selected_difficulty
+            self.build_ui()
+
+        for button in self.difficulty_buttons:
+            button.update(events)
+
+        for button in self.difficulty_buttons:
+            button.is_active = (button.text == self.selected_view)
+
         for btn in self.buttons:
             btn.update(events)
 
     def draw(self, surface):
-        surface.fill((35, 28, 16))
+        surface.fill((42, 46, 68))
 
-        title = self.font_title.render("HIGH SCORE", True, (255, 215, 0))
-        surface.blit(title, title.get_rect(center=(WIDTH // 2, 220)))
+        title = self.font_title.render("HIGH SCORES", True, (255, 255, 255))
+        surface.blit(title, title.get_rect(center=(WIDTH // 2, 140)))
 
-        label = self.font_sub.render("Best Run", True, (220, 220, 220))
-        surface.blit(label, label.get_rect(center=(WIDTH // 2, 370)))
+        subtitle = self.font_sub.render("Pick a difficulty to view its best run", True, (220, 220, 220))
+        surface.blit(subtitle, subtitle.get_rect(center=(WIDTH // 2, 210)))
 
-        score = self.font_score.render(str(self.game.high_score), True, (255, 255, 255))
-        surface.blit(score, score.get_rect(center=(WIDTH // 2, 560)))
+        for button in self.difficulty_buttons:
+            button.draw(surface)
+
+        panel = pygame.Rect(WIDTH // 2 - 380, 410, 760, 300)
+        shadow = panel.copy()
+        shadow.move_ip(8, 8)
+        pygame.draw.rect(surface, (24, 26, 38), shadow, border_radius=24)
+        pygame.draw.rect(surface, (66, 73, 104), panel, border_radius=24)
+        pygame.draw.rect(surface, (255, 255, 255), panel, width=2, border_radius=24)
+
+        label = self.font_label.render(f"{self.selected_view} High Score", True, (255, 255, 255))
+        surface.blit(label, label.get_rect(center=(WIDTH // 2, 485)))
+
+        score_value = self.game.high_scores.get(self.selected_view, 0)
+        score = self.font_score.render(str(score_value), True, (255, 255, 255))
+        surface.blit(score, score.get_rect(center=(WIDTH // 2, 600)))
+
+        if self.selected_view == self.game.selected_difficulty:
+            hint_text = "This is the currently selected game difficulty."
+        else:
+            hint_text = f"Current gameplay difficulty: {self.game.selected_difficulty}"
+        hint = self.font_hint.render(hint_text, True, (220, 220, 220))
+        surface.blit(hint, hint.get_rect(center=(WIDTH // 2, 735)))
 
         for btn in self.buttons:
             btn.draw(surface)

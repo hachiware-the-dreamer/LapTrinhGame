@@ -1,9 +1,23 @@
 import pygame
 import sys
-from scripts.settings import GameState, WIDTH, HEIGHT, FPS
+import json
+from pathlib import Path
+from scripts.settings import GameState, WIDTH, HEIGHT, FPS, DIFFICULTY_PRESETS
 from scripts.background import ParallaxBackground, ParallaxSeaView, ParallaxForest
 from scripts.entities import Player, SpawnerManager
-from scripts.screens import MainMenuScreen, PauseScreen, GameOverScreen, InstructionsScreen, SettingsScreen, HighScoreScreen
+from scripts.screens import (
+    MainMenuScreen,
+    PauseScreen,
+    GameOverScreen,
+    InstructionsScreen,
+    SettingsScreen,
+    HighScoreScreen,
+)
+
+
+HIGH_SCORE_FILE = Path("highscore.json")
+LEGACY_HIGH_SCORE_FILE = Path("highscore.txt")
+
 
 class GameManager:
     def __init__(self):
@@ -12,9 +26,8 @@ class GameManager:
         pygame.display.set_caption("Infinite Flyer")
         self.clock = pygame.time.Clock()
         self.running = True
-        
+
         self.score = 0
-        self.high_score = self.load_high_score()
         self.font = pygame.font.SysFont(None, 96)
 
         # Settings state
@@ -23,6 +36,8 @@ class GameManager:
         self.bg_idx = 0
         self.music_vol = 0.36
         self.sfx_vol = 0.36
+
+        self.selected_difficulty = "Medium"
 
         # Sound muffling mechanics
         self.current_music_vol = 1.0
@@ -38,9 +53,10 @@ class GameManager:
             self.sfx_coin = None
 
         # Scaling settings
-        self.start_gap = 300.0
-        self.min_gap = 140.0
-        self.shrink_rate = 5.0
+        self.apply_difficulty_preset(self.selected_difficulty)
+        self.high_scores = self.load_high_scores()
+        self.save_high_scores()
+        self.high_score = self.get_current_high_score()
 
         self.current_state = GameState.MAIN_MENU
 
@@ -85,35 +101,81 @@ class GameManager:
 
     def _update_audio(self, dt):
         """Smoothly glides the current volume toward the target volume every frame."""
-        fade_speed = 2.0 # Adjust this! Higher = faster fade, Lower = slower fade
-        
+        fade_speed = 2.0  # Adjust this! Higher = faster fade, Lower = slower fade
+
         if self.current_music_vol < self.target_music_vol:
             self.current_music_vol += fade_speed * dt
             if self.current_music_vol > self.target_music_vol:
                 self.current_music_vol = self.target_music_vol
-                
+
         elif self.current_music_vol > self.target_music_vol:
             self.current_music_vol -= fade_speed * dt
             if self.current_music_vol < self.target_music_vol:
                 self.current_music_vol = self.target_music_vol
-                
+
         pygame.mixer.music.set_volume(self.current_music_vol)
 
-    def load_high_score(self):
-        try:
-            with open("highscore.txt", "r", encoding="utf-8") as file:
-                return int(file.read())
-        except (FileNotFoundError, ValueError):
-            return 0
+    def _default_high_scores(self):
+        defaults = {name: 0 for name in DIFFICULTY_PRESETS}
+        defaults["Custom"] = 0
+        return defaults
 
-    def save_high_score(self):
-        with open("highscore.txt", "w", encoding="utf-8") as file:
-            file.write(str(self.high_score))
+    def load_high_scores(self):
+        high_scores = self._default_high_scores()
+
+        try:
+            with HIGH_SCORE_FILE.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            if isinstance(data, dict):
+                for difficulty, score in data.items():
+                    if difficulty in high_scores:
+                        try:
+                            high_scores[difficulty] = max(0, int(score))
+                        except (TypeError, ValueError):
+                            pass
+                return high_scores
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            pass
+
+        return high_scores
+
+    def save_high_scores(self):
+        with HIGH_SCORE_FILE.open("w", encoding="utf-8") as file:
+            json.dump(self.high_scores, file, indent=2)
+
+    def apply_difficulty_preset(self, preset_name):
+        preset = DIFFICULTY_PRESETS[preset_name]
+        self.start_gap = preset["start_gap"]
+        self.min_gap = preset["min_gap"]
+        self.shrink_rate = preset["shrink_rate"]
+        self.selected_difficulty = preset_name
+        if hasattr(self, "high_scores"):
+            self.high_score = self.get_current_high_score()
+
+    def sync_selected_difficulty(self):
+        for name, preset in DIFFICULTY_PRESETS.items():
+            if (
+                self.start_gap == preset["start_gap"]
+                and self.min_gap == preset["min_gap"]
+                and self.shrink_rate == preset["shrink_rate"]
+            ):
+                self.selected_difficulty = name
+                if hasattr(self, "high_scores"):
+                    self.high_score = self.get_current_high_score()
+                return
+        self.selected_difficulty = "Custom"
+        if hasattr(self, "high_scores"):
+            self.high_score = self.get_current_high_score()
+
+    def get_current_high_score(self):
+        return self.high_scores.get(self.selected_difficulty, 0)
 
     def update_high_score(self):
-        if self.score > self.high_score:
-            self.high_score = self.score
-            self.save_high_score()
+        current_best = self.high_scores.get(self.selected_difficulty, 0)
+        if self.score > current_best:
+            self.high_scores[self.selected_difficulty] = self.score
+            self.save_high_scores()
+        self.high_score = self.get_current_high_score()
 
     def play_sfx(self, sound):
         if sound is None:
@@ -127,22 +189,29 @@ class GameManager:
         self.tunnels.empty()
         self.score_zones.empty()
         self.collectibles.empty()
-        
-        self.player = Player(300, HEIGHT // 2, self.game_mode) 
+
+        self.player = Player(300, HEIGHT // 2, self.game_mode)
         self.all_sprites.add(self.player)
-        
-        self.spawner = SpawnerManager(self.tunnels, self.score_zones, self.collectibles, self.start_gap, self.min_gap, self.shrink_rate)
+
+        self.spawner = SpawnerManager(
+            self.tunnels,
+            self.score_zones,
+            self.collectibles,
+            self.start_gap,
+            self.min_gap,
+            self.shrink_rate,
+        )
         self.score = 0
 
         if self.current_state == GameState.MAIN_MENU:
             try:
-                pygame.mixer.music.load("assets/musics/bgm.mp3") 
+                pygame.mixer.music.load("assets/musics/bgm.mp3")
                 pygame.mixer.music.play(loops=-1)
             except pygame.error:
                 print("Warning: Could not find music file at assets/musics/bgm.mp3")
 
         self.current_state = GameState.PLAY
-        self.update_music_volume() # Restores full volume if we clicked "Retry" from Game Over
+        self.update_music_volume()  # Restores full volume if we clicked "Retry" from Game Over
 
     def toggle_pause(self):
         if self.current_state == GameState.PLAY:
@@ -156,7 +225,7 @@ class GameManager:
         if self.current_state == GameState.PLAY:
             self.update_high_score()
             self.play_sfx(self.sfx_die)
-        
+
         self.current_state = GameState.GAME_OVER
         self.update_music_volume()
 
@@ -171,6 +240,8 @@ class GameManager:
         self.current_state = GameState.SETTINGS
 
     def go_to_highscore(self):
+        self.high_score = self.get_current_high_score()
+        self.high_score_screen.select_difficulty(self.selected_difficulty)
         self.current_state = GameState.HIGH_SCORE
 
     def quit_game(self):
@@ -182,7 +253,7 @@ class GameManager:
             dt = self.clock.tick(FPS) / 1000.0
 
             self._update_audio(dt)
-            
+
             events = pygame.event.get()
             for event in events:
                 if event.type == pygame.QUIT:
@@ -211,8 +282,8 @@ class GameManager:
             elif self.current_state == GameState.PLAY:
                 self._draw_play()
             elif self.current_state == GameState.PAUSE:
-                self._draw_play() # Draw the frozen game underneath
-                self.pause_screen.draw(self.screen) # Draw the pause overlay on top
+                self._draw_play()  # Draw the frozen game underneath
+                self.pause_screen.draw(self.screen)  # Draw the pause overlay on top
             elif self.current_state == GameState.GAME_OVER:
                 self.game_over_screen.draw(self.screen)
             elif self.current_state == GameState.INSTRUCTIONS:
@@ -223,7 +294,7 @@ class GameManager:
                 self.high_score_screen.draw(self.screen)
 
             pygame.display.flip()
-            
+
         pygame.quit()
         sys.exit()
 
@@ -235,7 +306,7 @@ class GameManager:
                     self.player.flap()
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
                     self.toggle_pause()
-            
+
             # --- MOUSE CLICK TO FLAP ---
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self.player.flap()
@@ -260,7 +331,9 @@ class GameManager:
             self.score += 1
             # Optional: Add a sound effect trigger right here later!
 
-        collected_coins = pygame.sprite.spritecollide(self.player, self.collectibles, True)
+        collected_coins = pygame.sprite.spritecollide(
+            self.player, self.collectibles, True
+        )
         if collected_coins:
             self.play_sfx(self.sfx_coin)
             for coin in collected_coins:
@@ -275,6 +348,7 @@ class GameManager:
         # UI HUD
         score_surf = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
         self.screen.blit(score_surf, (40, 40))
+
 
 if __name__ == "__main__":
     game = GameManager()
