@@ -2,6 +2,7 @@ import pygame
 import sys
 import json
 from pathlib import Path
+from datetime import datetime
 from scripts.settings import GameState, WIDTH, HEIGHT, FPS, DIFFICULTY_PRESETS
 from scripts.background import ParallaxBackground, ParallaxSeaView, ParallaxForest
 from scripts.entities import Player, SpawnerManager
@@ -16,7 +17,6 @@ from scripts.screens import (
 
 
 HIGH_SCORE_FILE = Path("highscore.json")
-LEGACY_HIGH_SCORE_FILE = Path("highscore.txt")
 
 
 class GameManager:
@@ -116,8 +116,10 @@ class GameManager:
         pygame.mixer.music.set_volume(self.current_music_vol)
 
     def _default_high_scores(self):
-        defaults = {name: 0 for name in DIFFICULTY_PRESETS}
-        defaults["Custom"] = 0
+        defaults = {
+            name: {"score": 0, "achieved_at": None} for name in DIFFICULTY_PRESETS
+        }
+        defaults["Custom"] = {"score": 0, "achieved_at": None}
         return defaults
 
     def load_high_scores(self):
@@ -127,12 +129,23 @@ class GameManager:
             with HIGH_SCORE_FILE.open("r", encoding="utf-8") as file:
                 data = json.load(file)
             if isinstance(data, dict):
-                for difficulty, score in data.items():
+                for difficulty, value in data.items():
                     if difficulty in high_scores:
-                        try:
-                            high_scores[difficulty] = max(0, int(score))
-                        except (TypeError, ValueError):
-                            pass
+                        if isinstance(value, dict):
+                            try:
+                                high_scores[difficulty]["score"] = max(
+                                    0, int(value.get("score", 0))
+                                )
+                            except (TypeError, ValueError):
+                                pass
+                            achieved_at = value.get("achieved_at")
+                            if isinstance(achieved_at, str) or achieved_at is None:
+                                high_scores[difficulty]["achieved_at"] = achieved_at
+                        else:
+                            try:
+                                high_scores[difficulty]["score"] = max(0, int(value))
+                            except (TypeError, ValueError):
+                                pass
                 return high_scores
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             pass
@@ -168,12 +181,18 @@ class GameManager:
             self.high_score = self.get_current_high_score()
 
     def get_current_high_score(self):
-        return self.high_scores.get(self.selected_difficulty, 0)
+        return self.high_scores.get(self.selected_difficulty, {}).get("score", 0)
+
+    def get_high_score_entry(self, difficulty):
+        return self.high_scores.get(difficulty, {"score": 0, "achieved_at": None})
 
     def update_high_score(self):
-        current_best = self.high_scores.get(self.selected_difficulty, 0)
+        current_best = self.get_current_high_score()
         if self.score > current_best:
-            self.high_scores[self.selected_difficulty] = self.score
+            self.high_scores[self.selected_difficulty] = {
+                "score": self.score,
+                "achieved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
             self.save_high_scores()
         self.high_score = self.get_current_high_score()
 
