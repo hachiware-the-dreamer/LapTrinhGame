@@ -165,18 +165,11 @@ class SettingsScreen:
 
         # Pre-load backgrounds for previews (Scale them down significantly)
         self.bg_previews = []
-        bg_paths = ["assets/backgrounds/bg1/parts/bg_01.png", "assets/backgrounds/bg2/background.png", "assets/backgrounds/bg3/parallax_background_forest.png"]
-        
-        # Preload tunnel image for preview
-        try:
-            raw_tunnel_img = pygame.image.load("assets/obstacles/Aile_0040.png").convert_alpha()
-            bbox = raw_tunnel_img.get_bounding_rect()
-            cropped_tunnel = raw_tunnel_img.subsurface(bbox).copy()
-            # Scale down tunnel for the preview
-            tunnel_preview = pygame.transform.scale(cropped_tunnel, (30, 100))
-        except (pygame.error, FileNotFoundError):
-            tunnel_preview = pygame.Surface((30, 100))
-            tunnel_preview.fill((0, 255, 0))
+        bg_paths = [
+            "assets/backgrounds/bg1/landscape.png",
+            "assets/backgrounds/bg2/seaview_complete.png",
+            "assets/backgrounds/bg3/parallax_background_forest.png",
+        ]
 
         for idx, path in enumerate(bg_paths):
             preview_surf = pygame.Surface((250, 140))
@@ -189,10 +182,6 @@ class SettingsScreen:
                 if idx == 0: preview_surf.fill((50, 100, 150))
                 elif idx == 1: preview_surf.fill((0, 200, 255))
                 else: preview_surf.fill((30, 100, 50))
-            
-            # Draw sample tunnels onto the background preview
-            preview_surf.blit(tunnel_preview, (50, 80)) # Bottom tunnel
-            preview_surf.blit(pygame.transform.flip(tunnel_preview, False, True), (150, -40)) # Top tunnel
             
             self.bg_previews.append(preview_surf)
 
@@ -274,6 +263,11 @@ class SettingsScreen:
         self.game.set_background(idx)
         self.build_ui()
 
+    def _get_bg_preview_rect(self, index):
+        bg_x = WIDTH // 2 - 420 + (index * 280) + 125
+        bg_y = 740
+        return self.bg_previews[index].get_rect(center=(bg_x, bg_y))
+
     def build_ui(self):
         self.ui_elements.clear()
         center_x = WIDTH // 2
@@ -340,24 +334,6 @@ class SettingsScreen:
                 btn_char.is_active = self.game.char_idx == i
                 self.ui_elements.append(btn_char)
 
-            bg_options = [
-                (0, "BG 1"),
-                (1, "BG 2"),
-                (2, "BG 3"),
-            ]
-            for i, (idx, label) in enumerate(bg_options):
-                btn_bg = UIButton(
-                    center_x - 420 + (i * 280),
-                    820,
-                    250,
-                    60,
-                    label,
-                    lambda value=idx: self.select_bg(value),
-                    font_size=48,
-                )
-                btn_bg.is_active = self.game.bg_idx == idx
-                self.ui_elements.append(btn_bg)
-
         elif self.active_tab == "Difficulty":
             # Preset buttons
             btn_easy = UIButton(
@@ -417,6 +393,15 @@ class SettingsScreen:
         )
 
     def update(self, events):
+        if self.active_tab == "Customize":
+            for event in events:
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    mouse_pos = event.pos
+                    for i in range(3):
+                        if self._get_bg_preview_rect(i).collidepoint(mouse_pos):
+                            self.select_bg(i)
+                            break
+
         for elem in self.ui_elements:
             elem.update(events)
 
@@ -448,6 +433,7 @@ class SettingsScreen:
         if self.active_tab == "Customize":
             sub_char = self.font_sub.render("Select Character:", True, (200, 200, 200))
             surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 400)))
+            mouse_pos = pygame.mouse.get_pos()
 
             # Draw Character Previews
             for i in range(3):
@@ -464,15 +450,22 @@ class SettingsScreen:
 
             # Draw Background Previews
             for i in range(3):
-                bg_x = WIDTH // 2 - 420 + (i * 280) + 125
-                bg_y = 740
-                rect = self.bg_previews[i].get_rect(center=(bg_x, bg_y))
-                # Add highlighting if selected
-                if self.game.bg_idx == i:
-                    pygame.draw.rect(surface, (255, 215, 0), rect.inflate(10, 10), 4, border_radius=5)
+                rect = self._get_bg_preview_rect(i)
+                draw_rect = rect
+
+                if rect.collidepoint(mouse_pos):
+                    hover_image = pygame.transform.smoothscale(self.bg_previews[i], (270, 151))
+                    hover_rect = hover_image.get_rect(center=rect.center)
+                    surface.blit(hover_image, hover_rect)
+                    pygame.draw.rect(surface, (150, 210, 255), hover_rect.inflate(6, 6), 3, border_radius=6)
+                    draw_rect = hover_rect
                 else:
+                    surface.blit(self.bg_previews[i], rect)
                     pygame.draw.rect(surface, (200, 200, 200), rect.inflate(4, 4), 2)
-                surface.blit(self.bg_previews[i], rect)
+
+                # Keep selected state visible in both normal and hovered states.
+                if self.game.bg_idx == i:
+                    pygame.draw.rect(surface, (255, 215, 0), draw_rect.inflate(10, 10), 4, border_radius=6)
 
         for elem in self.ui_elements:
             elem.draw(surface)
