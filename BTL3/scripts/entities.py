@@ -173,6 +173,10 @@ class SpawnerManager:
         self.gap_shrink_rate = shrink_rate
         
         self.tunnels_spawned = 0
+        
+        # Pre-calculate the upcoming tunnel to safely interpolate coin spawns ahead of time
+        self.next_gap_size = int(start_gap)
+        self.next_gap_y = random.randint(200, HEIGHT - 200 - self.next_gap_size)
 
         # Mixi food jar
         try:
@@ -195,8 +199,9 @@ class SpawnerManager:
             self.spawn_tunnel_pair()
 
     def spawn_tunnel_pair(self):
-        gap_size = int(self.current_gap_size) 
-        gap_y = random.randint(200, HEIGHT - 200 - gap_size)
+        # Uses the pre-calculated gap for coin spawning
+        gap_size = self.next_gap_size
+        gap_y = self.next_gap_y
         
         x_pos = WIDTH + 100
         speed = 450.0
@@ -247,20 +252,58 @@ class SpawnerManager:
             if self.current_gap_size > self.min_gap_size:
                 self.current_gap_size -= self.gap_shrink_rate
 
-        # Spawn coins in the gap.
+        # Pre-calculate the next tunnel to predict the coin spawn path
+        future_gap_size = int(self.current_gap_size)
+        future_gap_y = random.randint(200, HEIGHT - 200 - future_gap_size)
+
+        # Spawn coins based on the path from current tunnel to next future tunnel
+        self.spawn_coins_between_tunnels(gap_y, gap_size, future_gap_y, future_gap_size, x_pos, speed)
+        
+        # Store future tunnel as the 'next' tunnel for when this function fires again
+        self.next_gap_size = future_gap_size
+        self.next_gap_y = future_gap_y
+
+    def spawn_coins_between_tunnels(self, curr_gap_y, curr_gap_size, next_gap_y, next_gap_size, curr_tunnel_x, speed):
+        """
+        Spawns coins horizontally between the current tunnel and the next upcoming one.
+        The Y position is strictly constrained between their gaps.
+        """
+        distance_between_tunnels = 2.0 * speed
+        coin_x = curr_tunnel_x + (distance_between_tunnels * 0.65)
+
         # 60% small coin, 20% big coin, 20% none.
         rand_val = random.random()
         if rand_val < 0.8:
-            if rand_val < 0.2:
-                side = random.choice(["top", "bottom"])
-                if side == "top":
-                    coin_y = gap_y + 10
-                else:
-                    coin_y = gap_y + gap_size - 98
-                coin = BigCoin(x_pos + cap_w + 10, coin_y, speed)
+            curr_center = curr_gap_y + (curr_gap_size // 2)
+            next_center = next_gap_y + (next_gap_size // 2)
+
+            # Calculate the height difference between the gaps
+            center_diff = abs(curr_center - next_center)
+            
+            if center_diff < 120:
+                # Gaps are nearly at the same height -> Force coin significantly higher or lower
+                offset = random.randint(120, 250)
+                direction = random.choice([-1, 1])
+                coin_y = curr_center + (offset * direction)
             else:
-                coin_y = gap_y + random.randint(24, max(25, gap_size - 86))
-                coin = SmallCoin(x_pos + cap_w + 30, coin_y, speed)
+                # Gaps naturally force movement -> Spawn proportionally bounded between them.
+                min_y = min(curr_center, next_center)
+                max_y = max(curr_center, next_center)
+                
+                # Larger buffer for big coins, smaller for standard coins.
+                buffer = 60 if rand_val < 0.2 else 30
+                min_y -= buffer
+                max_y += buffer
+                
+                coin_y = random.randint(int(min_y), int(max_y))
+            
+            # Keep safely within accessible screen bounds
+            coin_y = max(100, min(HEIGHT - 100, int(coin_y)))
+            
+            if rand_val < 0.2:
+                coin = BigCoin(coin_x, coin_y, speed)
+            else:
+                coin = SmallCoin(coin_x, coin_y, speed)
 
             if self.collectibles_group is not None:
                 self.collectibles_group.add(coin)
