@@ -152,8 +152,8 @@ Outcome:
 - Background 2 (Seaview): https://opengameart.org/content/background-seaview-parallax
 - Background 3 (Forest): https://opengameart.org/content/parallax-background-forest-pixel-art
 - Obstacles/Tiles: https://kenney.nl/assets/pixel-platformer
-- Background Music: https://opengameart.org/content/happy-arcade-tune
+- Background Music: https://www.youtube.com/watch?v=ohz9EXtmVY8
 - Coin Sprite: https://opengameart.org/content/spinning-pixel-coin-0
-- Game Over SFX: https://pixabay.com/sound-effects/search/game-over/
-- Coin Pick-up SFX: https://pixabay.com/sound-effects/search/8-bit%20coin/
+- Game Over SFX: https://www.youtube.com/watch?v=fVU_FTZ9l20
+- Coin Pick-up SFX: https://www.youtube.com/watch?v=H5P1wKU74Ik
 
