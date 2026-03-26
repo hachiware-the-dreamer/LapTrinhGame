@@ -99,9 +99,9 @@ class InstructionsScreen:
         # The game manual text
         self.instructions = [
             "HOW TO PLAY:",
-            "- Press SPACEBAR to flap your wings and fly upward.",
+            "- Press SPACEBAR or MOUSE1 to flap your wings and fly upward.",
             "- Avoid hitting the ceiling, the ground, or any obstacles.",
-            "- Collect spinning items to increase your score.",
+            "- Collect coins to increase your score.",
             "- Press ESC or P to pause the game.",
         ]
 
