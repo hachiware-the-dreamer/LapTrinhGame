@@ -1,5 +1,6 @@
 import pygame
 import random
+from pathlib import Path
 from scripts.settings import WIDTH, HEIGHT
 from scripts.coin_anim import CoinAnimation
 
@@ -15,9 +16,6 @@ class Entity(pygame.sprite.Sprite):
         self.rect.x -= self.speed_x * dt
         if self.rect.right < 0:
             self.kill()
-
-class Obstacle(Entity):
-    pass
 
 class Collectible(Entity):
     def __init__(self, x, y, speed_x, size=(48, 48), points=1):
@@ -102,34 +100,30 @@ class Player(pygame.sprite.Sprite):
         # Determine the image paths based on the selected character index
         if self.char_idx < 3: # Birds (0, 1, 2)
             idx = self.char_idx + 1
-            
-            # Try to load multi-frame animations (e.g. bird_00 to bird_19)
-            for i in range(20):
-                path = f"assets/sprites/bird/bird{idx}/bird_{i:02d}.png"
-                try:
-                    raw_img = pygame.image.load(path).convert_alpha()
-                    self.frames.append(pygame.transform.scale(raw_img, (60, 45)))
-                except (pygame.error, FileNotFoundError):
-                    break # Stop looking when a frame is missing
-            
-            # Fallback to the old up/down naming convention if no folder frames exist
-            if not self.frames:
-                paths = [f"assets/sprites/bird/bird{idx}_up.png", f"assets/sprites/bird/bird{idx}_down.png"]
-                for path in paths:
+
+            # Try to load all frames from the folder (bird_00.png, bird_01.png, ...)
+            bird_dir = Path("assets/sprites/bird") / f"bird{idx}"
+            if bird_dir.exists():
+                frame_paths = sorted(bird_dir.glob("bird_*.png"))
+                for path in frame_paths:
                     try:
-                        raw_img = pygame.image.load(path).convert_alpha()
+                        raw_img = pygame.image.load(str(path)).convert_alpha()
                         self.frames.append(pygame.transform.scale(raw_img, (60, 45)))
                     except (pygame.error, FileNotFoundError):
                         pass
+
         else: # Helicopters (3, 4, 5)
             idx = self.char_idx - 2
-            paths = [f"assets/sprites/helicopter/heli{idx}_1.png", f"assets/sprites/helicopter/heli{idx}_2.png"]
-            for path in paths:
-                try:
-                    raw_img = pygame.image.load(path).convert_alpha()
-                    self.frames.append(pygame.transform.scale(raw_img, (60, 45)))
-                except (pygame.error, FileNotFoundError):
-                    pass
+            heli_dir = Path("assets/sprites/helicopter") / f"helicopter{idx}"
+            if heli_dir.exists():
+                frame_paths = sorted(heli_dir.glob("*.png"))
+                for path in frame_paths:
+                    try:
+                        raw_img = pygame.image.load(str(path)).convert_alpha()
+                        self.frames.append(pygame.transform.scale(raw_img, (60, 45)))
+                    except (pygame.error, FileNotFoundError):
+                        pass
+
         
         # If absolutely no frames were loaded, use placeholder 
         if not self.frames:
@@ -159,7 +153,6 @@ class Player(pygame.sprite.Sprite):
         self.gravity_dir = 1.0       
         
         self.animation_timer = 0.0
-        self.state = "idle" 
 
     def update(self, dt):
         if self.game_mode == "Swing":
@@ -183,8 +176,6 @@ class Player(pygame.sprite.Sprite):
         else:
             is_active = (self.velocity_y < 0)   # Rising means 'active'
             
-        self.state = "active/flapping" if is_active else "idle/falling"
-
         # Handle Visuals
         if self.char_idx >= 3:  # Helicopters (3, 4, 5)
             # Spin wings continuously at ~10 FPS

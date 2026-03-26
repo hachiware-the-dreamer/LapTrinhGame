@@ -1,4 +1,5 @@
 import pygame
+from pathlib import Path
 from scripts.settings import WIDTH, HEIGHT, DIFFICULTY_PRESETS
 from scripts.utils import UIButton, UISlider
 
@@ -132,9 +133,6 @@ class InstructionsScreen:
             btn.draw(surface)
 
 
-from scripts.utils import UIButton, UISlider
-
-
 class SettingsScreen:
     def __init__(self, game):
         self.game = game
@@ -155,24 +153,22 @@ class SettingsScreen:
             img = None
             if idx < 3: # Birds
                 char_idx = idx + 1
-                # Try the modern animation sequence first, fallback to the old _up logic
-                modern_path = f"assets/sprites/bird/bird{char_idx}/bird_00.png"
-                legacy_path = f"assets/sprites/bird/bird{char_idx}_up.png"
-                
-                try:
-                    img = pygame.image.load(modern_path).convert_alpha()
-                except (pygame.error, FileNotFoundError):
+                bird_dir = Path("assets/sprites/bird") / f"bird{char_idx}"
+                frame_paths = sorted(bird_dir.glob("bird_*.png")) if bird_dir.exists() else []
+                if frame_paths:
                     try:
-                        img = pygame.image.load(legacy_path).convert_alpha()
+                        img = pygame.image.load(str(frame_paths[0])).convert_alpha()
                     except (pygame.error, FileNotFoundError):
-                        pass
+                        img = None
             else: # Helicopters
                 char_idx = idx - 2
-                path = f"assets/sprites/helicopter/heli{char_idx}_1.png"
-                try:
-                    img = pygame.image.load(path).convert_alpha()
-                except (pygame.error, FileNotFoundError):
-                    pass
+                heli_dir = Path("assets/sprites/helicopter") / f"helicopter{char_idx}"
+                frame_paths = sorted(heli_dir.glob("*.png")) if heli_dir.exists() else []
+                if frame_paths:
+                    try:
+                        img = pygame.image.load(str(frame_paths[0])).convert_alpha()
+                    except (pygame.error, FileNotFoundError):
+                        img = None
             
             if img:
                 self.char_images.append(pygame.transform.scale(img, (100, 75)))
@@ -275,11 +271,12 @@ class SettingsScreen:
 
     def toggle_mode(self):
         self.game.game_mode = "Swing" if self.game.game_mode == "Flappy" else "Flappy"
-        self.game.char_idx = 0
+        self.game.char_idx = self._allowed_char_indices()[0]
         self.build_ui()
 
     def select_char(self, idx):
-        self.game.char_idx = idx
+        if idx in self._allowed_char_indices():
+            self.game.char_idx = idx
         self.build_ui()
 
     def select_bg(self, idx):
@@ -290,6 +287,9 @@ class SettingsScreen:
         bg_x = WIDTH // 2 - 420 + (index * 280) + 125
         bg_y = 740
         return self.bg_previews[index].get_rect(center=(bg_x, bg_y))
+
+    def _allowed_char_indices(self):
+        return list(range(0, 3)) if self.game.game_mode == "Flappy" else list(range(3, 6))
 
     def build_ui(self):
         self.ui_elements.clear()
@@ -341,7 +341,8 @@ class SettingsScreen:
             )
             self.ui_elements.append(btn_mode)
 
-            for i in range(6):
+            allowed_chars = self._allowed_char_indices()
+            for i, char_idx in enumerate(allowed_chars):
                 row = i // 3
                 col = i % 3
                 
@@ -353,11 +354,11 @@ class SettingsScreen:
                     btn_y,
                     250,
                     50,
-                    f"Bird {i+1}" if i < 3 else f"Heli {i-2}",
-                    lambda idx=i: self.select_char(idx),
+                    f"Bird {char_idx+1}" if char_idx < 3 else f"Heli {char_idx-2}",
+                    lambda idx=char_idx: self.select_char(idx),
                     font_size=42,
                 )
-                btn_char.is_active = self.game.char_idx == i
+                btn_char.is_active = self.game.char_idx == char_idx
                 self.ui_elements.append(btn_char)
 
             bg_options = [
@@ -476,20 +477,21 @@ class SettingsScreen:
 
         if self.active_tab == "Customize":
             sub_char = self.font_sub.render("Select Character:", True, (200, 200, 200))
-            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 400)))
+            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 350)))
             mouse_pos = pygame.mouse.get_pos()
 
-            # Draw Character Previews
-            for i in range(6):
+            # Draw Character Previews (mode-specific)
+            allowed_chars = self._allowed_char_indices()
+            for i, char_idx in enumerate(allowed_chars):
                 row = i // 3
                 col = i % 3
                 char_x = WIDTH // 2 - 420 + (col * 280) + 125
-                char_y = 420 + (row * 135)
-                rect = self.char_images[i].get_rect(center=(char_x, char_y))
+                char_y = 410 + (row * 135)
+                rect = self.char_images[char_idx].get_rect(center=(char_x, char_y))
                 # Add highlighting if selected
-                if self.game.char_idx == i:
+                if self.game.char_idx == char_idx:
                     pygame.draw.rect(surface, (255, 215, 0), rect.inflate(10, 10), 4, border_radius=5)
-                surface.blit(self.char_images[i], rect)
+                surface.blit(self.char_images[char_idx], rect)
 
             sub_bg = self.font_sub.render("Select Background:", True, (200, 200, 200))
             surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 680)))
