@@ -3,6 +3,7 @@ import random
 from pathlib import Path
 from scripts.settings import WIDTH, HEIGHT
 from scripts.coin_anim import CoinAnimation
+from scripts.particles import FeatherParticle, ArrowParticle
 
 class Entity(pygame.sprite.Sprite):
     def __init__(self, x, y, speed_x, image=None):
@@ -90,11 +91,12 @@ class ScoreZone(Entity):
         self.rect = self.image.get_rect(topleft=(x, y))
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y, game_mode, char_idx=0):
+    def __init__(self, x, y, game_mode, particle_group, char_idx=0):
         super().__init__()
         
         self.game_mode = game_mode
         self.char_idx = char_idx
+        self.particle_group = particle_group
         
         self.frames = []
         # Determine the image paths based on the selected character index
@@ -215,8 +217,17 @@ class Player(pygame.sprite.Sprite):
     def flap(self):
         if self.game_mode == "Swing":
             self.gravity_dir *= -1.0
+
+            # Spawns slightly in front of the helicopter
+            arrow = ArrowParticle(self.rect.right + 20, self.rect.centery, self.gravity_dir)
+            self.particle_group.add(arrow)
         else: # Flappy
             self.velocity_y = self.flap_power
+
+            # Spawns 3 to 6 feathers near the bottom of the bird
+            for _ in range(random.randint(3, 6)):
+                feather = FeatherParticle(self.rect.centerx, self.rect.bottom)
+                self.particle_group.add(feather)
 
 class SpawnerManager:
     def __init__(self, tunnels_group, score_zones_group, collectibles_group, start_gap, min_gap, shrink_rate):

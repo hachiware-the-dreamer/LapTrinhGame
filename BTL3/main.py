@@ -70,6 +70,7 @@ class GameManager:
         self.tunnels = pygame.sprite.Group()
         self.score_zones = pygame.sprite.Group()
         self.collectibles = pygame.sprite.Group()
+        self.particles = pygame.sprite.Group()
 
         # Initialize Screens
         self.main_menu_screen = MainMenuScreen(self)
@@ -212,8 +213,9 @@ class GameManager:
         self.tunnels.empty()
         self.score_zones.empty()
         self.collectibles.empty()
+        self.particles.empty()
 
-        self.player = Player(300, HEIGHT // 2, self.game_mode, self.char_idx)
+        self.player = Player(300, HEIGHT // 2, self.game_mode,self.particles, self.char_idx)
         self.all_sprites.add(self.player)
 
         self.spawner = SpawnerManager(
@@ -338,6 +340,7 @@ class GameManager:
 
         self.background.update(dt)
         self.spawner.update(dt)
+        self.particles.update(dt)
         self.all_sprites.update(dt)
         self.tunnels.update(dt)
         self.score_zones.update(dt)
@@ -367,6 +370,7 @@ class GameManager:
     def _draw_play(self):
         self.background.draw(self.screen)
         self.tunnels.draw(self.screen)
+        self.particles.draw(self.screen)
         self.all_sprites.draw(self.screen)
         self.collectibles.draw(self.screen)
 
