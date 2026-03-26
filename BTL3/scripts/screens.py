@@ -285,7 +285,7 @@ class SettingsScreen:
 
     def _get_bg_preview_rect(self, index):
         bg_x = WIDTH // 2 - 420 + (index * 280) + 125
-        bg_y = 740
+        bg_y = 750
         return self.bg_previews[index].get_rect(center=(bg_x, bg_y))
 
     def _allowed_char_indices(self):
@@ -331,10 +331,10 @@ class SettingsScreen:
 
         if self.active_tab == "Customize":
             btn_mode = UIButton(
-                center_x - 200,
+                center_x - 250,
                 300,
-                400,
-                50,
+                450,
+                75,
                 f"Mode: {self.game.game_mode}",
                 self.toggle_mode,
                 font_size=50,
@@ -347,7 +347,7 @@ class SettingsScreen:
                 col = i % 3
                 
                 # Calculate coordinates for character icons
-                btn_y = 465 + (row * 135)
+                btn_y = 540 + (row * 135)
                 
                 btn_char = UIButton(
                     center_x - 420 + (col * 280),
@@ -477,7 +477,7 @@ class SettingsScreen:
 
         if self.active_tab == "Customize":
             sub_char = self.font_sub.render("Select Character:", True, (200, 200, 200))
-            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 350)))
+            surface.blit(sub_char, sub_char.get_rect(center=(WIDTH // 2, 410)))
             mouse_pos = pygame.mouse.get_pos()
 
             # Draw Character Previews (mode-specific)
@@ -486,7 +486,7 @@ class SettingsScreen:
                 row = i // 3
                 col = i % 3
                 char_x = WIDTH // 2 - 420 + (col * 280) + 125
-                char_y = 410 + (row * 135)
+                char_y = 480 + (row * 135)
                 rect = self.char_images[char_idx].get_rect(center=(char_x, char_y))
                 # Add highlighting if selected
                 if self.game.char_idx == char_idx:
@@ -494,7 +494,7 @@ class SettingsScreen:
                 surface.blit(self.char_images[char_idx], rect)
 
             sub_bg = self.font_sub.render("Select Background:", True, (200, 200, 200))
-            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 680)))
+            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 640)))
 
             # Draw Background Previews
             for i in range(3):
