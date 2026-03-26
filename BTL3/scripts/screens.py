@@ -151,16 +151,39 @@ class SettingsScreen:
         
         # Preload characters for previews
         self.char_images = []
-        char_paths = ["assets/sprites/bird1.png", "assets/sprites/bird2.png", "assets/sprites/helicopter.png"]
-        for idx, path in enumerate(char_paths):
-            try:
-                img = pygame.image.load(path).convert_alpha()
+        for idx in range(6):
+            img = None
+            if idx < 3: # Birds
+                char_idx = idx + 1
+                # Try the modern animation sequence first, fallback to the old _up logic
+                modern_path = f"assets/sprites/bird/bird{char_idx}/bird_00.png"
+                legacy_path = f"assets/sprites/bird/bird{char_idx}_up.png"
+                
+                try:
+                    img = pygame.image.load(modern_path).convert_alpha()
+                except (pygame.error, FileNotFoundError):
+                    try:
+                        img = pygame.image.load(legacy_path).convert_alpha()
+                    except (pygame.error, FileNotFoundError):
+                        pass
+            else: # Helicopters
+                char_idx = idx - 2
+                path = f"assets/sprites/helicopter/heli{char_idx}_1.png"
+                try:
+                    img = pygame.image.load(path).convert_alpha()
+                except (pygame.error, FileNotFoundError):
+                    pass
+            
+            if img:
                 self.char_images.append(pygame.transform.scale(img, (100, 75)))
-            except (pygame.error, FileNotFoundError):
+            else:
                 surf = pygame.Surface((100, 75))
                 if idx == 0: surf.fill((255, 255, 0))
                 elif idx == 1: surf.fill((255, 0, 0))
-                else: surf.fill((0, 0, 255))
+                elif idx == 2: surf.fill((128, 0, 128))
+                elif idx == 3: surf.fill((0, 0, 255))
+                elif idx == 4: surf.fill((0, 255, 255))
+                else: surf.fill((255, 128, 0))
                 self.char_images.append(surf)
 
         # Pre-load backgrounds for previews (Scale them down significantly)
@@ -311,28 +334,49 @@ class SettingsScreen:
                 center_x - 200,
                 300,
                 400,
-                60,
+                50,
                 f"Mode: {self.game.game_mode}",
                 self.toggle_mode,
-                font_size=56,
+                font_size=50,
             )
             self.ui_elements.append(btn_mode)
 
-            for i in range(3):
+            for i in range(6):
+                row = i // 3
+                col = i % 3
+                
                 # Calculate coordinates for character icons
-                char_x = center_x - 420 + (i * 280) + 125  # Center of the button
+                btn_y = 465 + (row * 135)
                 
                 btn_char = UIButton(
-                    center_x - 420 + (i * 280),
-                    530,
+                    center_x - 420 + (col * 280),
+                    btn_y,
                     250,
-                    60,
-                    f"Char {i+1}",
+                    50,
+                    f"Bird {i+1}" if i < 3 else f"Heli {i-2}",
                     lambda idx=i: self.select_char(idx),
-                    font_size=48,
+                    font_size=42,
                 )
                 btn_char.is_active = self.game.char_idx == i
                 self.ui_elements.append(btn_char)
+
+            bg_options = [
+                (0, "BG 1"),
+                (1, "BG 2"),
+                (2, "BG 3"),
+            ]
+            for i, (idx, label) in enumerate(bg_options):
+                btn_bg = UIButton(
+                    center_x - 420 + (i * 280),
+                    840,
+                    250,
+                    60,
+                    label,
+                    lambda value=idx: self.select_bg(value),
+                    font_size=48,
+                )
+                btn_bg.is_active = self.game.bg_idx == idx
+                self.ui_elements.append(btn_bg)
 
         elif self.active_tab == "Difficulty":
             # Preset buttons
@@ -436,9 +480,11 @@ class SettingsScreen:
             mouse_pos = pygame.mouse.get_pos()
 
             # Draw Character Previews
-            for i in range(3):
-                char_x = WIDTH // 2 - 420 + (i * 280) + 125
-                char_y = 470
+            for i in range(6):
+                row = i // 3
+                col = i % 3
+                char_x = WIDTH // 2 - 420 + (col * 280) + 125
+                char_y = 420 + (row * 135)
                 rect = self.char_images[i].get_rect(center=(char_x, char_y))
                 # Add highlighting if selected
                 if self.game.char_idx == i:
@@ -446,7 +492,7 @@ class SettingsScreen:
                 surface.blit(self.char_images[i], rect)
 
             sub_bg = self.font_sub.render("Select Background:", True, (200, 200, 200))
-            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 640)))
+            surface.blit(sub_bg, sub_bg.get_rect(center=(WIDTH // 2, 680)))
 
             # Draw Background Previews
             for i in range(3):

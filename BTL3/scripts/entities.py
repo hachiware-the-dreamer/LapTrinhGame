@@ -98,38 +98,63 @@ class Player(pygame.sprite.Sprite):
         self.game_mode = game_mode
         self.char_idx = char_idx
         
-        # Determine the image path based on the selected character index
-        if self.char_idx == 0:
-            img_path = "assets/sprites/bird1.png"
-        elif self.char_idx == 1:
-            img_path = "assets/sprites/bird2.png"
-        else: # self.char_idx == 2
-            img_path = "assets/sprites/helicopter.png"
+        self.frames = []
+        # Determine the image paths based on the selected character index
+        if self.char_idx < 3: # Birds (0, 1, 2)
+            idx = self.char_idx + 1
             
-        try:
-            # Load the image and scale it if necessary
-            raw_img = pygame.image.load(img_path).convert_alpha()
-            self.image = pygame.transform.scale(raw_img, (60, 45)) # Adjust size as needed
-        except (pygame.error, FileNotFoundError):
-            print(f"Warning: Could not load {img_path}. Using placeholder.")
-            self.image = pygame.Surface((60, 60))
-            if self.char_idx == 0:
-                self.image.fill((255, 255, 0)) # Yellow for Bird 1
-            elif self.char_idx == 1:
-                self.image.fill((255, 0, 0))   # Red for Bird 2
+            # Try to load multi-frame animations (e.g. bird_00 to bird_19)
+            for i in range(20):
+                path = f"assets/sprites/bird/bird{idx}/bird_{i:02d}.png"
+                try:
+                    raw_img = pygame.image.load(path).convert_alpha()
+                    self.frames.append(pygame.transform.scale(raw_img, (60, 45)))
+                except (pygame.error, FileNotFoundError):
+                    break # Stop looking when a frame is missing
+            
+            # Fallback to the old up/down naming convention if no folder frames exist
+            if not self.frames:
+                paths = [f"assets/sprites/bird/bird{idx}_up.png", f"assets/sprites/bird/bird{idx}_down.png"]
+                for path in paths:
+                    try:
+                        raw_img = pygame.image.load(path).convert_alpha()
+                        self.frames.append(pygame.transform.scale(raw_img, (60, 45)))
+                    except (pygame.error, FileNotFoundError):
+                        pass
+        else: # Helicopters (3, 4, 5)
+            idx = self.char_idx - 2
+            paths = [f"assets/sprites/helicopter/heli{idx}_1.png", f"assets/sprites/helicopter/heli{idx}_2.png"]
+            for path in paths:
+                try:
+                    raw_img = pygame.image.load(path).convert_alpha()
+                    self.frames.append(pygame.transform.scale(raw_img, (60, 45)))
+                except (pygame.error, FileNotFoundError):
+                    pass
+        
+        # If absolutely no frames were loaded, use placeholder 
+        if not self.frames:
+            print(f"Warning: Could not load frames for char {self.char_idx}. Using placeholder.")
+            placeholder = pygame.Surface((60, 45))
+            if self.char_idx < 3:
+                if self.char_idx == 0: placeholder.fill((255, 255, 0)) # Yellow
+                elif self.char_idx == 1: placeholder.fill((255, 0, 0)) # Red
+                else: placeholder.fill((128, 0, 128)) # Purple
             else:
-                self.image.fill((0, 0, 255))   # Blue for Helicopter
+                if self.char_idx == 3: placeholder.fill((0, 0, 255)) # Blue
+                elif self.char_idx == 4: placeholder.fill((0, 255, 255)) # Cyan
+                else: placeholder.fill((255, 128, 0)) # Orange
+            self.frames.append(placeholder)
                 
+        self.current_frame = 0
+        self.image = self.frames[self.current_frame]
         self.rect = self.image.get_rect(center=(x, y))
         
         self.velocity_y = 0.0
         
         # --- PHYSICS TUNING ---
-        # Flappy mode uses normal gravity and impulse flapping
         self.flappy_gravity = 1620.0        
         self.flap_power = -600.0    
         
-        # Swing mode uses extreme gravity for tight, smooth turnarounds without snapping
         self.swing_gravity = 1800.0
         self.gravity_dir = 1.0       
         
@@ -148,11 +173,53 @@ class Player(pygame.sprite.Sprite):
 
         self.rect.y += self.velocity_y * dt
 
+        # Update animation timer based on game time (deltaTime)
         self.animation_timer += dt
-        if self.velocity_y < 0:
-            self.state = "active/flapping"
+        
+        # Determine actual state (Active/Flapping vs Idle/Falling)
+        is_active = False
+        if self.game_mode == "Swing":
+            is_active = (self.gravity_dir < 0)  # Reversing gravity means 'active'
         else:
-            self.state = "idle/falling"
+            is_active = (self.velocity_y < 0)   # Rising means 'active'
+            
+        self.state = "active/flapping" if is_active else "idle/falling"
+
+        # Handle Visuals
+        if self.char_idx >= 3:  # Helicopters (3, 4, 5)
+            # Spin wings continuously at ~10 FPS
+            frame_duration = 0.1  
+            if self.animation_timer >= frame_duration:
+                self.animation_timer = 0.0
+                self.current_frame = (self.current_frame + 1) % len(self.frames)
+            
+            base_image = self.frames[self.current_frame]
+            # Active means flipping vertically
+            if is_active:
+                self.image = pygame.transform.flip(base_image, False, True)
+            else:
+                self.image = base_image
+                
+        else:  # Birds (0, 1, 2)
+            if len(self.frames) > 2:
+                # We have a multi-frame sequence (e.g. 14 frames)
+                # Play the animation loop faster when active, freeze when idle
+                if is_active:
+                    frame_duration = 0.04  # Fast flap
+                    if self.animation_timer >= frame_duration:
+                        self.animation_timer = 0.0
+                        self.current_frame = (self.current_frame + 1) % len(self.frames)
+                    self.image = self.frames[self.current_frame]
+                else:
+                    # Idle/Falling: Freeze on the first frame (gliding pose)
+                    self.current_frame = 0
+                    self.image = self.frames[self.current_frame]
+            else:
+                # Legacy 2-frame fallback: Frame 0 is Idle (wings up), Frame 1 is Active (wings down)
+                if is_active and len(self.frames) > 1:
+                    self.image = self.frames[1]
+                else:
+                    self.image = self.frames[0]
 
     def flap(self):
         if self.game_mode == "Swing":
