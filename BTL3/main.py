@@ -34,9 +34,9 @@ class GameManager:
         self.game_mode = "Flappy"
         self.char_idx = 0
         self.bg_idx = 0
-        self.music_vol = 0.05
-        self.menu_music_vol = 0.05
-        self.sfx_vol = 0.15
+        self.music_vol = 0.18
+        self.menu_music_vol = 0.18
+        self.sfx_vol = 0.18
 
         self.selected_difficulty = "Medium"
 
