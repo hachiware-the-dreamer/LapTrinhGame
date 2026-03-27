@@ -271,13 +271,16 @@ class GameManager:
         self.update_music_volume()
 
     def go_to_menu(self):
+        coming_from_game = self.current_state not in (
+            GameState.MAIN_MENU, GameState.INSTRUCTIONS, GameState.SETTINGS, GameState.HIGH_SCORE
+        )
         self.current_state = GameState.MAIN_MENU
-        try:
-            pygame.mixer.music.load("assets/musics/menu.mp3")
-            pygame.mixer.music.set_volume(self.music_vol)
-            pygame.mixer.music.play(loops=-1)
-        except pygame.error:
-            pygame.mixer.music.stop()
+        if coming_from_game:
+            try:
+                pygame.mixer.music.load("assets/musics/menu.mp3")
+                pygame.mixer.music.play(loops=-1)
+            except pygame.error:
+                pygame.mixer.music.stop()
         self.update_music_volume()
 
     def go_to_instructions(self):
