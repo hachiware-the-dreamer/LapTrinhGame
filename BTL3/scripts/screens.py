@@ -8,9 +8,11 @@ class MainMenuScreen:
     def __init__(self, game):
         self.game = game
         self.font = pygame.font.SysFont(None, 96)
-        
+
         try:
-            raw_bg = pygame.image.load("assets/backgrounds/bg1/landscape.png").convert_alpha()
+            raw_bg = pygame.image.load(
+                "assets/backgrounds/bg1/landscape.png"
+            ).convert_alpha()
             self.bg_image = pygame.transform.scale(raw_bg, (WIDTH, HEIGHT))
         except (pygame.error, FileNotFoundError):
             self.bg_image = None
@@ -67,7 +69,7 @@ class MainMenuScreen:
             surface.blit(overlay, (0, 0))
         else:
             surface.fill((50, 50, 50))
-            
+
         title = self.font.render("INFINITE FLYER", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(WIDTH // 2, 200)))
         for btn in self.buttons:
@@ -81,7 +83,9 @@ class InstructionsScreen:
         self.font_text = pygame.font.SysFont(None, 48)
 
         try:
-            raw_bg = pygame.image.load("assets/backgrounds/bg1/landscape.png").convert_alpha()
+            raw_bg = pygame.image.load(
+                "assets/backgrounds/bg1/landscape.png"
+            ).convert_alpha()
             self.bg_image = pygame.transform.scale(raw_bg, (WIDTH, HEIGHT))
         except (pygame.error, FileNotFoundError):
             self.bg_image = None
@@ -113,7 +117,7 @@ class InstructionsScreen:
         if self.bg_image:
             surface.blit(self.bg_image, (0, 0))
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 150)) # slightly darker overlay for reading text
+            overlay.fill((0, 0, 0, 150))  # slightly darker overlay for reading text
             surface.blit(overlay, (0, 0))
         else:
             surface.fill((40, 60, 80))  # A nice dark blueish background
@@ -140,46 +144,58 @@ class SettingsScreen:
         self.font_sub = pygame.font.SysFont(None, 64)
 
         self.active_tab = "Customize"
-        
+
         try:
-            raw_bg = pygame.image.load("assets/backgrounds/bg1/landscape.png").convert_alpha()
+            raw_bg = pygame.image.load(
+                "assets/backgrounds/bg1/landscape.png"
+            ).convert_alpha()
             self.bg_image = pygame.transform.scale(raw_bg, (WIDTH, HEIGHT))
         except (pygame.error, FileNotFoundError):
             self.bg_image = None
-        
+
         # Preload characters for previews
         self.char_images = []
         for idx in range(6):
             img = None
-            if idx < 3: # Birds
+            if idx < 3:  # Birds
                 char_idx = idx + 1
                 bird_dir = Path("assets/sprites/bird") / f"bird{char_idx}"
-                frame_paths = sorted(bird_dir.glob("bird_*.png")) if bird_dir.exists() else []
+                frame_paths = (
+                    sorted(bird_dir.glob("bird_*.png")) if bird_dir.exists() else []
+                )
                 if frame_paths:
                     try:
                         img = pygame.image.load(str(frame_paths[0])).convert_alpha()
                     except (pygame.error, FileNotFoundError):
                         img = None
-            else: # Helicopters
+            else:  # Helicopters
                 char_idx = idx - 2
                 heli_dir = Path("assets/sprites/helicopter") / f"helicopter{char_idx}"
-                frame_paths = sorted(heli_dir.glob("*.png")) if heli_dir.exists() else []
+                frame_paths = (
+                    sorted(heli_dir.glob("*.png")) if heli_dir.exists() else []
+                )
                 if frame_paths:
                     try:
                         img = pygame.image.load(str(frame_paths[0])).convert_alpha()
                     except (pygame.error, FileNotFoundError):
                         img = None
-            
+
             if img:
                 self.char_images.append(pygame.transform.scale(img, (100, 75)))
             else:
                 surf = pygame.Surface((100, 75))
-                if idx == 0: surf.fill((255, 255, 0))
-                elif idx == 1: surf.fill((255, 0, 0))
-                elif idx == 2: surf.fill((128, 0, 128))
-                elif idx == 3: surf.fill((0, 0, 255))
-                elif idx == 4: surf.fill((0, 255, 255))
-                else: surf.fill((255, 128, 0))
+                if idx == 0:
+                    surf.fill((255, 255, 0))
+                elif idx == 1:
+                    surf.fill((255, 0, 0))
+                elif idx == 2:
+                    surf.fill((128, 0, 128))
+                elif idx == 3:
+                    surf.fill((0, 0, 255))
+                elif idx == 4:
+                    surf.fill((0, 255, 255))
+                else:
+                    surf.fill((255, 128, 0))
                 self.char_images.append(surf)
 
         # Pre-load backgrounds for previews (Scale them down significantly)
@@ -198,10 +214,13 @@ class SettingsScreen:
                 scaled_img = pygame.transform.scale(img, (250, 140))
                 preview_surf.blit(scaled_img, (0, 0))
             except (pygame.error, FileNotFoundError):
-                if idx == 0: preview_surf.fill((50, 100, 150))
-                elif idx == 1: preview_surf.fill((0, 200, 255))
-                else: preview_surf.fill((30, 100, 50))
-            
+                if idx == 0:
+                    preview_surf.fill((50, 100, 150))
+                elif idx == 1:
+                    preview_surf.fill((0, 200, 255))
+                else:
+                    preview_surf.fill((30, 100, 50))
+
             self.bg_previews.append(preview_surf)
 
         # --- AUDIO SLIDERS ---
@@ -289,7 +308,9 @@ class SettingsScreen:
         return self.bg_previews[index].get_rect(center=(bg_x, bg_y))
 
     def _allowed_char_indices(self):
-        return list(range(0, 3)) if self.game.game_mode == "Flappy" else list(range(3, 6))
+        return (
+            list(range(0, 3)) if self.game.game_mode == "Flappy" else list(range(3, 6))
+        )
 
     def build_ui(self):
         self.ui_elements.clear()
@@ -345,10 +366,10 @@ class SettingsScreen:
             for i, char_idx in enumerate(allowed_chars):
                 row = i // 3
                 col = i % 3
-                
+
                 # Calculate coordinates for character icons
                 btn_y = 540 + (row * 135)
-                
+
                 btn_char = UIButton(
                     center_x - 420 + (col * 280),
                     btn_y,
@@ -490,7 +511,9 @@ class SettingsScreen:
                 rect = self.char_images[char_idx].get_rect(center=(char_x, char_y))
                 # Add highlighting if selected
                 if self.game.char_idx == char_idx:
-                    pygame.draw.rect(surface, (255, 215, 0), rect.inflate(10, 10), 4, border_radius=5)
+                    pygame.draw.rect(
+                        surface, (255, 215, 0), rect.inflate(10, 10), 4, border_radius=5
+                    )
                 surface.blit(self.char_images[char_idx], rect)
 
             sub_bg = self.font_sub.render("Select Background:", True, (200, 200, 200))
@@ -502,10 +525,18 @@ class SettingsScreen:
                 draw_rect = rect
 
                 if rect.collidepoint(mouse_pos):
-                    hover_image = pygame.transform.smoothscale(self.bg_previews[i], (270, 151))
+                    hover_image = pygame.transform.smoothscale(
+                        self.bg_previews[i], (270, 151)
+                    )
                     hover_rect = hover_image.get_rect(center=rect.center)
                     surface.blit(hover_image, hover_rect)
-                    pygame.draw.rect(surface, (150, 210, 255), hover_rect.inflate(6, 6), 3, border_radius=6)
+                    pygame.draw.rect(
+                        surface,
+                        (150, 210, 255),
+                        hover_rect.inflate(6, 6),
+                        3,
+                        border_radius=6,
+                    )
                     draw_rect = hover_rect
                 else:
                     surface.blit(self.bg_previews[i], rect)
@@ -513,7 +544,13 @@ class SettingsScreen:
 
                 # Keep selected state visible in both normal and hovered states.
                 if self.game.bg_idx == i:
-                    pygame.draw.rect(surface, (255, 215, 0), draw_rect.inflate(10, 10), 4, border_radius=6)
+                    pygame.draw.rect(
+                        surface,
+                        (255, 215, 0),
+                        draw_rect.inflate(10, 10),
+                        4,
+                        border_radius=6,
+                    )
 
         for elem in self.ui_elements:
             elem.draw(surface)

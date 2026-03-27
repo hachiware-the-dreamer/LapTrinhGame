@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls C:UsersAdminDocumentsCodeGameDevLapTrinhGameBTL3/*.py)"
+    ]
+  }
+}

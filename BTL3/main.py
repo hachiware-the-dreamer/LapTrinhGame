@@ -34,14 +34,15 @@ class GameManager:
         self.game_mode = "Flappy"
         self.char_idx = 0
         self.bg_idx = 0
-        self.music_vol = 0.36
-        self.sfx_vol = 0.36
+        self.music_vol = 0.05
+        self.menu_music_vol = 0.05
+        self.sfx_vol = 0.15
 
         self.selected_difficulty = "Medium"
 
         # Sound muffling mechanics
-        self.current_music_vol = 1.0
-        self.target_music_vol = 1.0
+        self.current_music_vol = self.menu_music_vol
+        self.target_music_vol = self.menu_music_vol
 
         # SFX
         try:
@@ -80,6 +81,15 @@ class GameManager:
         self.settings_screen = SettingsScreen(self)
         self.high_score_screen = HighScoreScreen(self)
 
+        try:
+            pygame.mixer.music.load("assets/musics/menu.mp3")
+            pygame.mixer.music.set_volume(self.music_vol)
+            pygame.mixer.music.play(loops=-1)
+        except pygame.error:
+            print(
+                "Warning: Could not find music file at assets/musics/menu_terraria.mp3"
+            )
+
     def _create_background(self, idx):
         # idx 0 -> bg1, idx 1 -> bg2, idx 2 -> bg3
         if idx == 1:
@@ -101,6 +111,8 @@ class GameManager:
         """Sets the target volume. The update loop will smoothly fade to it."""
         if self.current_state in [GameState.PAUSE, GameState.GAME_OVER]:
             self.target_music_vol = self.music_vol * 0.3
+        elif self.current_state in [GameState.MAIN_MENU, GameState.INSTRUCTIONS, GameState.SETTINGS, GameState.HIGH_SCORE]:
+            self.target_music_vol = self.menu_music_vol
         else:
             self.target_music_vol = self.music_vol
 
@@ -215,7 +227,9 @@ class GameManager:
         self.collectibles.empty()
         self.particles.empty()
 
-        self.player = Player(300, HEIGHT // 2, self.game_mode,self.particles, self.char_idx)
+        self.player = Player(
+            300, HEIGHT // 2, self.game_mode, self.particles, self.char_idx
+        )
         self.all_sprites.add(self.player)
 
         self.spawner = SpawnerManager(
@@ -230,10 +244,12 @@ class GameManager:
 
         if self.current_state == GameState.MAIN_MENU:
             try:
-                pygame.mixer.music.load("assets/musics/bgm_mixi.mp3") 
+                pygame.mixer.music.load("assets/musics/bgm_mixi.mp3")
                 pygame.mixer.music.play(loops=-1)
             except pygame.error:
-                print("Warning: Could not find music file at assets/musics/bgm_mixi.mp3")
+                print(
+                    "Warning: Could not find music file at assets/musics/bgm_mixi.mp3"
+                )
 
         self.current_state = GameState.PLAY
         self.update_music_volume()  # Restores full volume if we clicked "Retry" from Game Over
@@ -256,7 +272,13 @@ class GameManager:
 
     def go_to_menu(self):
         self.current_state = GameState.MAIN_MENU
-        pygame.mixer.music.stop()
+        try:
+            pygame.mixer.music.load("assets/musics/menu.mp3")
+            pygame.mixer.music.set_volume(self.music_vol)
+            pygame.mixer.music.play(loops=-1)
+        except pygame.error:
+            pygame.mixer.music.stop()
+        self.update_music_volume()
 
     def go_to_instructions(self):
         self.current_state = GameState.INSTRUCTIONS
@@ -329,14 +351,18 @@ class GameManager:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     self.player.flap()
-                    self.play_sfx(self.sfx_swing if self.game_mode == "Swing" else self.sfx_flap)
+                    self.play_sfx(
+                        self.sfx_swing if self.game_mode == "Swing" else self.sfx_flap
+                    )
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
                     self.toggle_pause()
 
             # --- MOUSE CLICK TO FLAP ---
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self.player.flap()
-                self.play_sfx(self.sfx_swing if self.game_mode == "Swing" else self.sfx_flap)
+                self.play_sfx(
+                    self.sfx_swing if self.game_mode == "Swing" else self.sfx_flap
+                )
 
         self.background.update(dt)
         self.spawner.update(dt)
