@@ -1,6 +1,7 @@
 import pygame
 import sys
 import json
+import random
 from pathlib import Path
 from datetime import datetime
 from scripts.settings import GameState, WIDTH, HEIGHT, FPS, DIFFICULTY_PRESETS
@@ -44,6 +45,11 @@ class GameManager:
         # Sound muffling mechanics
         self.current_music_vol = self.menu_music_vol
         self.target_music_vol = self.menu_music_vol
+
+        # Screen shaking mechanics
+        self.shake_duration = 0.0
+        self.shake_intensity = 0
+        self.is_dying = False
 
         # SFX
         try:
@@ -223,6 +229,11 @@ class GameManager:
         sound.set_volume(self.sfx_vol)
         sound.play()
 
+    def trigger_shake(self, duration=0.3, intensity=15):
+        """Starts a screen shake effect."""
+        self.shake_duration = duration
+        self.shake_intensity = intensity
+
     # --- STATE TRANSITIONS ---
     def start_game(self):
         self.all_sprites.empty()
@@ -274,9 +285,9 @@ class GameManager:
         if self.current_state == GameState.PLAY:
             self.update_high_score()
             self.play_sfx(self.sfx_die)
-
-        self.current_state = GameState.GAME_OVER
-        self.update_music_volume()
+            self.trigger_shake(0.3, 20)
+            self.is_dying = True
+            self.update_music_volume()
 
     def go_to_menu(self):
         coming_from_game = self.current_state not in (
@@ -351,6 +362,15 @@ class GameManager:
             elif self.current_state == GameState.HIGH_SCORE:
                 self.high_score_screen.draw(self.screen)
 
+            # Apply screen shake when dying
+            if self.shake_duration > 0:
+                self.shake_duration -= dt
+                shaken_screen = self.screen.copy()
+                offset_x = random.randint(-self.shake_intensity, self.shake_intensity)
+                offset_y = random.randint(-self.shake_intensity, self.shake_intensity)
+                self.screen.fill((0, 0, 0)) 
+                self.screen.blit(shaken_screen, (offset_x, offset_y))
+
             pygame.display.flip()
 
         pygame.quit()
@@ -358,6 +378,15 @@ class GameManager:
 
     # Gameplay-specific Update & Draw
     def _update_play(self, events, dt):
+        # --- NEW: HIT-STOP LOGIC ---
+        if self.is_dying:
+            # Wait for the shake to finish in the main loop...
+            if self.shake_duration <= 0:
+                # Shake is done! Now we actually transition to the Game Over screen.
+                self.current_state = GameState.GAME_OVER
+                self.is_dying = False
+            return # Skip all physics and movement updates so the screen is frozen!
+        
         for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
