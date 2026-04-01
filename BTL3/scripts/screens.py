@@ -7,7 +7,14 @@ from scripts.utils import UIButton, UISlider
 class MainMenuScreen:
     def __init__(self, game):
         self.game = game
-        self.font = pygame.font.SysFont(None, 96)
+        
+        try:
+            self.font_title = pygame.font.Font("assets/fonts/LilitaOne-Regular.ttf", 120)
+        except (pygame.error, FileNotFoundError):
+            print("Warning: Could not load custom font, falling back to default.")
+            self.font_title = pygame.font.SysFont(None, 96)
+            
+        self.font_sub = pygame.font.SysFont(None, 64)
 
         try:
             raw_bg = pygame.image.load(
@@ -70,7 +77,7 @@ class MainMenuScreen:
         else:
             surface.fill((50, 50, 50))
 
-        title = self.font.render("INFINITE FLYER", True, (255, 255, 255))
+        title = self.font_title.render("INFINITE FLYER", True, (255, 255, 255))
         surface.blit(title, title.get_rect(center=(WIDTH // 2, 200)))
         for btn in self.buttons:
             btn.draw(surface)
