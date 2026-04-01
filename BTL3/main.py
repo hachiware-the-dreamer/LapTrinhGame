@@ -6,6 +6,7 @@ from datetime import datetime
 from scripts.settings import GameState, WIDTH, HEIGHT, FPS, DIFFICULTY_PRESETS
 from scripts.background import ParallaxBackground, ParallaxSeaView, ParallaxForest
 from scripts.entities import Player, SpawnerManager
+from scripts.particles import ParticlePool
 from scripts.screens import (
     MainMenuScreen,
     PauseScreen,
@@ -72,6 +73,9 @@ class GameManager:
         self.score_zones = pygame.sprite.Group()
         self.collectibles = pygame.sprite.Group()
         self.particles = pygame.sprite.Group()
+
+        # Particle Object Pool
+        self.particle_pool = ParticlePool(feather_count=50, arrow_count=20)
 
         # Initialize Screens
         self.main_menu_screen = MainMenuScreen(self)
@@ -225,10 +229,14 @@ class GameManager:
         self.tunnels.empty()
         self.score_zones.empty()
         self.collectibles.empty()
-        self.particles.empty()
+
+        # --- PROPERLY RECYCLE PARTICLES INSTEAD OF EMPTYING THEM ---
+        # We wrap it in list() so we don't crash by modifying the group while looping through it
+        for p in list(self.particles):
+            p.deactivate()
 
         self.player = Player(
-            300, HEIGHT // 2, self.game_mode, self.particles, self.char_idx
+            300, HEIGHT // 2, self.game_mode, self.particles, self.particle_pool, self.char_idx
         )
         self.all_sprites.add(self.player)
 
@@ -374,6 +382,9 @@ class GameManager:
         self.tunnels.update(dt)
         self.score_zones.update(dt)
         self.collectibles.update(dt)
+
+        # --- DEBUG LINE FOR OBJECT POOL ---
+        # print(f"Active Feathers: {len(self.particles)} | Sleeping Feathers: {len(self.particle_pool.feathers)}")
 
         # --- CEILING AND GROUND COLLISION ---
         if self.player.rect.top <= 0 or self.player.rect.bottom >= HEIGHT:
