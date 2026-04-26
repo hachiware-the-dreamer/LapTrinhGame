@@ -115,6 +115,50 @@ class CardSpriteAtlas:
         rounded.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         return rounded
 
+    def _apply_wild_color_choice(self, surface: pygame.Surface, chosen_color: str) -> pygame.Surface:
+        palette = {
+            "red": (224, 68, 68),
+            "yellow": (238, 206, 62),
+            "green": (76, 178, 92),
+            "blue": (72, 128, 220),
+        }
+        color = palette.get(chosen_color)
+        if color is None:
+            return surface
+
+        width, height = surface.get_size()
+        radius = self._rounded_radius(width, height)
+        result = surface.copy()
+
+        glow = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.rect(glow, (*color, 58), glow.get_rect().inflate(-6, -6), border_radius=radius)
+        result.blit(glow, (0, 0))
+
+        border_width = max(4, min(width, height) // 12)
+        pygame.draw.rect(
+            result,
+            color,
+            result.get_rect().inflate(-border_width, -border_width),
+            width=border_width,
+            border_radius=radius,
+        )
+        pygame.draw.rect(
+            result,
+            (255, 255, 255),
+            result.get_rect().inflate(-(border_width * 3), -(border_width * 3)),
+            width=max(2, border_width // 2),
+            border_radius=max(4, radius - border_width),
+        )
+
+        ribbon = [
+            (width, 0),
+            (width, int(height * 0.34)),
+            (int(width * 0.66), 0),
+        ]
+        pygame.draw.polygon(result, color, ribbon)
+        pygame.draw.line(result, (255, 255, 255), ribbon[1], ribbon[2], width=max(2, border_width // 2))
+        return result
+
     def get_back_surface(self, width: int, height: int) -> pygame.Surface:
         key = ("back", width, height)
         if key in self.cache:
@@ -129,7 +173,8 @@ class CardSpriteAtlas:
 
     def get_card_surface(self, card: Card, width: int, height: int) -> pygame.Surface:
         map_key = self._card_key(card)
-        cache_key = (f"{map_key}", width, height)
+        chosen_color = card.chosen_color if card.is_wild else None
+        cache_key = (f"{map_key}:{chosen_color}", width, height)
         if cache_key in self.cache:
             return self.cache[cache_key]
 
@@ -142,5 +187,7 @@ class CardSpriteAtlas:
         image = self.sheet.subsurface(src).copy()
         scaled = pygame.transform.smoothscale(image, (width, height))
         rounded = self._apply_rounded_corners(scaled)
+        if chosen_color is not None:
+            rounded = self._apply_wild_color_choice(rounded, chosen_color)
         self.cache[cache_key] = rounded
         return rounded

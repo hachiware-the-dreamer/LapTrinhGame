@@ -102,6 +102,8 @@ def perform_simple_ai_turn(game: UnoGameManager, now_ms: Optional[int] = None) -
     if best_idx >= 0:
         card = game.player_hands[pid][best_idx]
         chosen_color = game.choose_color_for_player(pid) if card.is_wild else None
+        if len(game.player_hands[pid]) == 2:
+            game.call_uno(pid)
         result = game.submit_action(
             PlayerAction(
                 player_id=pid,

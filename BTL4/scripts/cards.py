@@ -21,6 +21,7 @@ class Card:
     target_rotation: float = 0.0
     current_scale: float = 1.0
     target_scale: float = 1.0
+    chosen_color: Optional[str] = None
 
     @property
     def is_wild(self) -> bool:

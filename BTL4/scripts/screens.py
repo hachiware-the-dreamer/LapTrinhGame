@@ -1,11 +1,13 @@
 import random
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import pygame
 
 from scripts.animation import ActiveCard, lerp, lerp_point, smooth_factor, transform_card_surface
 from scripts.ai import AITurnOutcome, perform_simple_ai_turn
+from scripts.cards import Card
 from scripts.game_manager import (
     PlayerAction,
     PASS_CLOCKWISE,
@@ -19,7 +21,7 @@ from scripts.sprites import CardSpriteAtlas
 from scripts.ui import (
     card_rect_for_hand,
     get_card_rect_from_pos,
-    get_color_picker_rects,
+    get_draw_decision_button_rects,
     get_draw_pile_rect,
     get_end_screen_button_rects,
     get_hovered_hand_index,
@@ -31,6 +33,8 @@ from scripts.ui import (
     get_rule_seven_target_rects,
     get_rule_zero_choice_rects,
     get_title_screen_button_rects,
+    get_uno_button_rect,
+    get_wild_color_at_pos,
     render_end_screen,
     render_title_screen,
     render_ui,
@@ -181,6 +185,10 @@ class PlayingScreen(BaseScreen):
         self.direction_arrow_speed = self.DIRECTION_ARROW_BASE_SPEED * self.game.turn_direction
         self.visual_state = ""
         self.hand_transfer_animation: HandTransferAnimation | None = None
+        self.wild_hovered_color: str | None = None
+        self.pending_draw_decision_card: Card | None = None
+        self.pending_draw_decision_choosing_color = False
+        self.uno_catch_sound = self._load_uno_catch_sound()
 
     @property
     def wants_bgm(self) -> bool:
@@ -237,8 +245,16 @@ class PlayingScreen(BaseScreen):
             self.last_message = tick_message
 
         self.hovered_index = None
+        self.wild_hovered_color = None
+        if self.game.pending_draw_decision_card is None:
+            self.pending_draw_decision_card = None
+            self.pending_draw_decision_choosing_color = False
+
+        if self._wild_color_picker_active():
+            self.wild_hovered_color = get_wild_color_at_pos(pygame.mouse.get_pos(), screen.get_rect())
+
         if (
-            self.pending_wild_card_index is None
+            not self._has_modal_input()
             and self.game.winner is None
             and self.game.current_player == 0
         ):
@@ -252,7 +268,13 @@ class PlayingScreen(BaseScreen):
 
         self._update_player_hand_animation(screen, dt)
 
-        if self.game.winner is None and self.game.current_player != 0 and not self.active_cards and not self.game.is_animating:
+        if (
+            self.game.winner is None
+            and self.game.current_player != 0
+            and self.pending_draw_decision_card is None
+            and not self.active_cards
+            and not self.game.is_animating
+        ):
             if self.game.pending_effect in (RULE_ZERO_DIRECTION, RULE_SEVEN_TARGET):
                 ai_choice = self._build_ai_hand_transfer_action()
                 if ai_choice is not None:
@@ -261,6 +283,8 @@ class PlayingScreen(BaseScreen):
                 previous_player = self.game.current_player
                 ai_turn = perform_simple_ai_turn(self.game, now_ms=now_ms)
                 self.last_message = ai_turn.message
+                if ai_turn.result is not None and ai_turn.result.uno_caught_player is not None:
+                    self._play_uno_catch_sound()
                 self._spawn_ai_animation(previous_player, ai_turn, screen, now_ms)
                 ai_delay = self.ai_rng.randint(1000, 1500)
                 self.next_ai_time = now_ms + ai_delay
@@ -279,10 +303,12 @@ class PlayingScreen(BaseScreen):
             self.selected_index,
             self.last_message,
             hovered_index=self.hovered_index,
-            wild_color_picker_active=(self.pending_wild_card_index is not None),
+            wild_color_picker_active=self._wild_color_picker_active(),
             hidden_card_ids=self.hidden_hand_card_ids,
             display_top_card=self.display_top_card,
             direction_arrow_angle=self.direction_arrow_angle,
+            wild_hovered_color=self.wild_hovered_color,
+            draw_decision_card=self.pending_draw_decision_card,
         )
         self._draw_active_cards(screen)
         self._draw_hand_transfer_cards(screen)
@@ -358,9 +384,21 @@ class PlayingScreen(BaseScreen):
                 self._record_player_action_result(result, now_ms)
             return
 
-        if self.pending_wild_card_index is not None:
-            for color, rect in get_color_picker_rects(screen.get_rect()).items():
-                if rect.collidepoint(mouse_pos):
+        if self._wild_color_picker_active():
+            color = get_wild_color_at_pos(mouse_pos, screen.get_rect())
+            if color is not None:
+                if self.pending_draw_decision_choosing_color:
+                    result = self.game.play_pending_draw_decision(
+                        0,
+                        chosen_color=color,
+                        timestamp_ms=now_ms,
+                    )
+                    if result.ok:
+                        self.pending_draw_decision_card = None
+                        self.pending_draw_decision_choosing_color = False
+                        self._spawn_player_animation(0, result, "draw", screen, now_ms)
+                    self._record_player_action_result(result, now_ms)
+                else:
                     result = self.game.submit_action(
                         PlayerAction(
                             player_id=0,
@@ -374,10 +412,27 @@ class PlayingScreen(BaseScreen):
                     self._spawn_player_animation(0, result, "play", screen, now_ms)
                     self._record_player_action_result(result, now_ms)
                     self._clamp_selected_index()
+            return
+
+        if self.pending_draw_decision_card is not None:
+            for button_name, rect in get_draw_decision_button_rects(screen.get_rect()).items():
+                if rect.collidepoint(mouse_pos):
+                    if button_name == "play":
+                        self._play_pending_draw_decision(screen, now_ms)
+                    elif button_name == "keep":
+                        self._keep_pending_draw_decision(screen, now_ms)
                     break
             return
 
         if self.game.current_player != 0 or self.game.pending_effect is not None:
+            return
+
+        uno_rect = get_uno_button_rect(screen.get_rect())
+        if uno_rect.collidepoint(mouse_pos):
+            result = self.game.submit_action(
+                PlayerAction(player_id=0, action_type="uno", timestamp_ms=now_ms)
+            )
+            self._record_player_action_result(result, now_ms)
             return
 
         hand = self.game.player_hands[0]
@@ -410,19 +465,26 @@ class PlayingScreen(BaseScreen):
         if not clicked_card:
             draw_rect = get_draw_pile_rect(screen.get_width(), screen.get_height())
             if draw_rect.collidepoint(mouse_pos):
-                result = self.game.submit_action(
-                    PlayerAction(player_id=0, action_type="draw", timestamp_ms=now_ms)
-                )
-                self._spawn_player_animation(0, result, "draw", screen, now_ms)
-                self._record_player_action_result(result, now_ms)
+                self._draw_for_decision(screen, now_ms)
 
     def _handle_key_down(self, event: pygame.event.Event, screen: pygame.Surface, now_ms: int) -> None:
         hand = self.game.player_hands[0]
 
-        if self.pending_wild_card_index is not None:
+        if self._wild_color_picker_active():
             if event.key == pygame.K_ESCAPE:
-                self.pending_wild_card_index = None
-                self.last_message = "Wild color selection canceled."
+                if self.pending_draw_decision_choosing_color:
+                    self.pending_draw_decision_choosing_color = False
+                    self.last_message = "Choose whether to play or keep the drawn card."
+                else:
+                    self.pending_wild_card_index = None
+                    self.last_message = "Wild color selection canceled."
+            return
+
+        if self.pending_draw_decision_card is not None:
+            if event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_p):
+                self._play_pending_draw_decision(screen, now_ms)
+            elif event.key in (pygame.K_k, pygame.K_ESCAPE):
+                self._keep_pending_draw_decision(screen, now_ms)
             return
 
         if event.key == pygame.K_LEFT and hand:
@@ -446,17 +508,76 @@ class PlayingScreen(BaseScreen):
                 self._record_player_action_result(result, now_ms)
                 self._clamp_selected_index()
         elif event.key == pygame.K_d and self.game.pending_effect is None:
+            self._draw_for_decision(screen, now_ms)
+        elif event.key == pygame.K_u and self.game.pending_effect is None:
             result = self.game.submit_action(
-                PlayerAction(player_id=0, action_type="draw", timestamp_ms=now_ms)
+                PlayerAction(player_id=0, action_type="uno", timestamp_ms=now_ms)
             )
-            self._spawn_player_animation(0, result, "draw", screen, now_ms)
             self._record_player_action_result(result, now_ms)
+
+    def _has_modal_input(self) -> bool:
+        return self._wild_color_picker_active() or self.pending_draw_decision_card is not None
+
+    def _wild_color_picker_active(self) -> bool:
+        return self.pending_wild_card_index is not None or self.pending_draw_decision_choosing_color
+
+    def _draw_for_decision(self, screen: pygame.Surface, now_ms: int) -> None:
+        result = self.game.draw_for_decision(0)
+        if result.ok and self.game.pending_draw_decision_card is result.drew_card:
+            self.pending_draw_decision_card = result.drew_card
+            self.pending_draw_decision_choosing_color = False
+            self._record_player_action_result(result, now_ms)
+            return
+
+        self._spawn_player_animation(0, result, "draw", screen, now_ms)
+        self._record_player_action_result(result, now_ms)
+
+    def _play_pending_draw_decision(self, screen: pygame.Surface, now_ms: int) -> None:
+        card = self.pending_draw_decision_card
+        if card is None:
+            return
+        if card.is_wild:
+            self.pending_draw_decision_choosing_color = True
+            self.last_message = "Choose a color for the drawn wild card."
+            return
+
+        result = self.game.play_pending_draw_decision(0, timestamp_ms=now_ms)
+        if result.ok:
+            self.pending_draw_decision_card = None
+            self.pending_draw_decision_choosing_color = False
+            self._spawn_player_animation(0, result, "draw", screen, now_ms)
+        self._record_player_action_result(result, now_ms)
+
+    def _keep_pending_draw_decision(self, screen: pygame.Surface, now_ms: int) -> None:
+        result = self.game.keep_pending_draw_decision(0)
+        if result.ok:
+            self.pending_draw_decision_card = None
+            self.pending_draw_decision_choosing_color = False
+            self._spawn_player_animation(0, result, "draw", screen, now_ms)
+            self._clamp_selected_index()
+        self._record_player_action_result(result, now_ms)
 
     def _record_player_action_result(self, result, now_ms: int) -> None:
         self.last_message = result.message
+        if result.ok and result.uno_caught_player is not None:
+            self._play_uno_catch_sound()
         # Prevent same-frame AI actions from hiding turn transitions (e.g., after Reverse).
         if result.ok and self.game.winner is None and self.game.current_player != 0:
             self.next_ai_time = max(self.next_ai_time, now_ms + self.AI_TURN_DELAY_MS)
+
+    def _load_uno_catch_sound(self) -> pygame.mixer.Sound | None:
+        if not pygame.mixer.get_init():
+            return None
+        try:
+            sound = pygame.mixer.Sound(str(Path("assets") / "sfx" / "woww.mp3"))
+            sound.set_volume(0.75)
+            return sound
+        except pygame.error:
+            return None
+
+    def _play_uno_catch_sound(self) -> None:
+        if self.uno_catch_sound is not None:
+            self.uno_catch_sound.play()
 
     def _build_ai_hand_transfer_action(self) -> PlayerAction | None:
         if self.game.pending_effect == RULE_ZERO_DIRECTION:
@@ -656,18 +777,18 @@ class PlayingScreen(BaseScreen):
 
         if action_kind == "play":
             card = result.played_card
-            if card is None:
-                return
-            self._spawn_active_card(
-                card=card,
-                owner_id=player_id,
-                kind="play",
-                start_pos=get_player_anchor_point(screen_rect, player_id, self.game.num_players),
-                target_pos=get_discard_pile_rect(screen_rect).center,
-                start_rotation=get_player_card_rotation(player_id, self.game.num_players),
-                target_rotation=get_player_card_rotation(player_id, self.game.num_players)
-                + self.ai_rng.uniform(-12.0, 12.0),
-            )
+            if card is not None:
+                self._spawn_active_card(
+                    card=card,
+                    owner_id=player_id,
+                    kind="play",
+                    start_pos=get_player_anchor_point(screen_rect, player_id, self.game.num_players),
+                    target_pos=get_discard_pile_rect(screen_rect).center,
+                    start_rotation=get_player_card_rotation(player_id, self.game.num_players),
+                    target_rotation=get_player_card_rotation(player_id, self.game.num_players)
+                    + self.ai_rng.uniform(-12.0, 12.0),
+                )
+            self._spawn_uno_penalty_animation(result, screen)
             return
 
         if action_kind == "draw":
@@ -682,23 +803,23 @@ class PlayingScreen(BaseScreen):
                     start_rotation=0.0,
                     target_rotation=self.ai_rng.uniform(-12.0, 12.0),
                 )
+                self._spawn_uno_penalty_animation(result, screen)
                 return
 
             card = result.drew_card
-            if card is None:
-                return
-
-            self.hidden_hand_card_ids.add(id(card))
-            self._spawn_active_card(
-                card=card,
-                owner_id=player_id,
-                kind="draw",
-                start_pos=get_draw_pile_rect(screen.get_width(), screen.get_height()).center,
-                target_pos=get_player_anchor_point(screen_rect, player_id, self.game.num_players),
-                start_rotation=0.0,
-                target_rotation=get_player_card_rotation(player_id, self.game.num_players),
-                reveal_hand_card=True,
-            )
+            if card is not None:
+                self.hidden_hand_card_ids.add(id(card))
+                self._spawn_active_card(
+                    card=card,
+                    owner_id=player_id,
+                    kind="draw",
+                    start_pos=get_draw_pile_rect(screen.get_width(), screen.get_height()).center,
+                    target_pos=get_player_anchor_point(screen_rect, player_id, self.game.num_players),
+                    start_rotation=0.0,
+                    target_rotation=get_player_card_rotation(player_id, self.game.num_players),
+                    reveal_hand_card=True,
+                )
+            self._spawn_uno_penalty_animation(result, screen)
 
     def _spawn_ai_animation(self, player_id: int, outcome: AITurnOutcome, screen: pygame.Surface, now_ms: int) -> None:
         if outcome.action_type == "play" and outcome.card is not None:
@@ -712,6 +833,8 @@ class PlayingScreen(BaseScreen):
                 target_rotation=get_player_card_rotation(player_id, self.game.num_players)
                 + self.ai_rng.uniform(-12.0, 12.0),
             )
+            if outcome.result is not None:
+                self._spawn_uno_penalty_animation(outcome.result, screen)
             return
 
         if outcome.action_type == "draw" and outcome.card is not None:
@@ -724,6 +847,8 @@ class PlayingScreen(BaseScreen):
                 start_rotation=0.0,
                 target_rotation=get_player_card_rotation(player_id, self.game.num_players),
             )
+            if outcome.result is not None:
+                self._spawn_uno_penalty_animation(outcome.result, screen)
             return
 
         if outcome.action_type == "draw_played" and outcome.card is not None:
@@ -735,6 +860,32 @@ class PlayingScreen(BaseScreen):
                 target_pos=get_discard_pile_rect(screen.get_rect()).center,
                 start_rotation=0.0,
                 target_rotation=self.ai_rng.uniform(-12.0, 12.0),
+            )
+            if outcome.result is not None:
+                self._spawn_uno_penalty_animation(outcome.result, screen)
+
+    def _spawn_uno_penalty_animation(self, result, screen: pygame.Surface) -> None:
+        player_id = result.uno_caught_player
+        if player_id is None or not result.uno_penalty_cards:
+            return
+
+        screen_rect = screen.get_rect()
+        draw_center = get_draw_pile_rect(screen.get_width(), screen.get_height()).center
+        target_center = get_player_anchor_point(screen_rect, player_id, self.game.num_players)
+
+        for offset, card in enumerate(result.uno_penalty_cards):
+            if player_id == 0:
+                self.hidden_hand_card_ids.add(id(card))
+            stagger = float((offset - 0.5) * 14)
+            self._spawn_active_card(
+                card=card,
+                owner_id=player_id,
+                kind="draw",
+                start_pos=(float(draw_center[0] + stagger), float(draw_center[1] - stagger)),
+                target_pos=(float(target_center[0] + stagger), float(target_center[1])),
+                start_rotation=0.0,
+                target_rotation=get_player_card_rotation(player_id, self.game.num_players),
+                reveal_hand_card=(player_id == 0),
             )
 
     def _spawn_active_card(

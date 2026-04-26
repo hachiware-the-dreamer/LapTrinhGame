@@ -1,0 +1,2 @@
+# Pinned to a version with Linux CPython wheels.
+pygame==2.6.1

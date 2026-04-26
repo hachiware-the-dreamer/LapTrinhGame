@@ -5,12 +5,15 @@ import pygame
 from scripts.screens import TitleScreen
 from scripts.sprites import CardSpriteAtlas
 
+DEFAULT_SCREEN_SIZE = (1920, 1080)
+MIN_SCREEN_SIZE = (1100, 720)
+
 
 def main() -> None:
     pygame.init()
     pygame.mixer.init()
     pygame.display.set_caption("UNO tay`")
-    screen = pygame.display.set_mode((1920, 1080))
+    screen = pygame.display.set_mode(DEFAULT_SCREEN_SIZE, pygame.RESIZABLE)
     clock = pygame.time.Clock()
 
     # Asset loading
@@ -37,6 +40,14 @@ def main() -> None:
             bgm_playing = False
 
         events = pygame.event.get()
+        for event in events:
+            if event.type == pygame.VIDEORESIZE:
+                new_size = (
+                    max(MIN_SCREEN_SIZE[0], event.w),
+                    max(MIN_SCREEN_SIZE[1], event.h),
+                )
+                screen = pygame.display.set_mode(new_size, pygame.RESIZABLE)
+
         result = current_screen.handle_events(events, screen, now)
         if not result.running:
             running = False

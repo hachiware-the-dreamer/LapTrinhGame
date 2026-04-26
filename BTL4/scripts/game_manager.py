@@ -1,11 +1,12 @@
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Set, Tuple
 
 from scripts.cards import (
     ACTION_DRAW_TWO,
     ACTION_REVERSE,
     ACTION_SKIP,
+    ACTION_WILD,
     ACTION_WILD_DRAW_FOUR,
     COLORS,
     Card,
@@ -37,6 +38,9 @@ class ActionResult:
     message: str
     played_card: Optional[Card] = None
     drew_card: Optional[Card] = None
+    uno_call_player: Optional[int] = None
+    uno_caught_player: Optional[int] = None
+    uno_penalty_cards: List[Card] = field(default_factory=list)
 
 
 class UnoGameManager:
@@ -70,6 +74,9 @@ class UnoGameManager:
 
         self.pending_draw_penalty_count = 0
         self.pending_draw_penalty_kind: Optional[str] = None
+        self.pending_draw_decision_player: Optional[int] = None
+        self.pending_draw_decision_card: Optional[Card] = None
+        self.uno_called_players: Set[int] = set()
 
         self.is_animating = False
 
@@ -113,10 +120,15 @@ class UnoGameManager:
         self.pending_reaction_times.clear()
         self.pending_draw_penalty_count = 0
         self.pending_draw_penalty_kind = None
+        self.pending_draw_decision_player = None
+        self.pending_draw_decision_card = None
+        self.uno_called_players.clear()
 
     def draw_from_pile(self) -> Card:
         self.rebuild_draw_pile_if_needed()
-        return self.draw_pile.pop()
+        card = self.draw_pile.pop()
+        card.chosen_color = None
+        return card
 
     def tick(self, now_ms: int) -> Optional[str]:
         if self.pending_effect == RULE_REACTION and self.pending_reaction_due_ms is not None and now_ms >= self.pending_reaction_due_ms:
@@ -192,6 +204,12 @@ class UnoGameManager:
                 return self._resolve_seven_target(action)
             return ActionResult(False, "Choose a swap target first.")
 
+        if self.pending_draw_decision_card is not None:
+            return ActionResult(False, "Choose whether to play or keep the drawn card.")
+
+        if action.action_type == "uno":
+            return self.call_uno(action.player_id)
+
         if action.player_id != self.current_player:
             return ActionResult(False, "Not this player's turn.")
 
@@ -223,71 +241,198 @@ class UnoGameManager:
             chosen_color = card.color
 
         hand.pop(action.card_index)
+        return self._finish_played_card(action.player_id, card, chosen_color, action.timestamp_ms)
+
+    def _finish_played_card(
+        self,
+        player_id: int,
+        card: Card,
+        chosen_color: Optional[str],
+        timestamp_ms: Optional[int] = None,
+    ) -> ActionResult:
+        hand = self.player_hands[player_id]
+        card.chosen_color = chosen_color if card.is_wild else None
         self.discard_pile.append(card)
         self.current_color = chosen_color if chosen_color is not None else card.color
 
         if card.kind == "number" and card.number == 0:
             self.pending_effect = RULE_ZERO_DIRECTION
-            self.pending_effect_player = action.player_id
-            return ActionResult(True, "Rule of 0: choose hand pass direction.", played_card=card)
+            self.pending_effect_player = player_id
+            return self._apply_uno_check(
+                player_id,
+                ActionResult(True, "Rule of 0: choose hand pass direction.", played_card=card),
+            )
 
         if card.kind == "number" and card.number == 7:
             self.pending_effect = RULE_SEVEN_TARGET
-            self.pending_effect_player = action.player_id
-            return ActionResult(True, "Rule of 7: choose a target player to swap hands with.", played_card=card)
+            self.pending_effect_player = player_id
+            return self._apply_uno_check(
+                player_id,
+                ActionResult(True, "Rule of 7: choose a target player to swap hands with.", played_card=card),
+            )
 
         if card.kind == "number" and card.number == 8:
             self.pending_effect = RULE_REACTION
-            self.pending_effect_player = action.player_id
-            started_at = action.timestamp_ms or 0
+            self.pending_effect_player = player_id
+            started_at = timestamp_ms or 0
             self.pending_reaction_started_at_ms = started_at
             self.pending_reaction_due_ms = started_at + self.REACTION_WINDOW_MS
             self.pending_reaction_players = set()
             self.pending_reaction_times = []
-            return ActionResult(True, "Rule of 8: reaction event started.", played_card=card)
+            return self._apply_uno_check(
+                player_id,
+                ActionResult(True, "Rule of 8: reaction event started.", played_card=card),
+            )
 
         if len(hand) == 0:
-            self.winner = action.player_id
-            return ActionResult(True, f"Player {action.player_id + 1} wins!", played_card=card)
+            self.winner = player_id
+            return ActionResult(True, f"Player {player_id + 1} wins!", played_card=card)
 
         self._apply_played_card_effect(card)
         
         # Debug logging
         direction_str = "Clockwise" if self.turn_direction == 1 else "Counter-Clockwise"
         next_player = self._next_player_index(self.turn_direction)
-        print(f"[TURN DEBUG] Player {action.player_id} played {card.short_label}. Current Direction: {direction_str}. Next player should be: Player {next_player}.")
+        print(f"[TURN DEBUG] Player {player_id} played {card.short_label}. Current Direction: {direction_str}. Next player should be: Player {next_player}.")
         
-        return ActionResult(True, "Card played.", played_card=card)
+        return self._apply_uno_check(player_id, ActionResult(True, "Card played.", played_card=card))
+
+    def call_uno(self, player_id: int) -> ActionResult:
+        if not (0 <= player_id < self.num_players):
+            return ActionResult(False, "Invalid player.")
+
+        hand_size = len(self.player_hands[player_id])
+        if hand_size == 0:
+            return ActionResult(False, "That player has no cards.")
+        if hand_size > 2:
+            return ActionResult(False, "UNO can be called when you have two cards.")
+
+        self.uno_called_players.add(player_id)
+        return ActionResult(True, f"player {player_id + 1} tay` roi", uno_call_player=player_id)
+
+    def _apply_uno_check(self, player_id: int, result: ActionResult) -> ActionResult:
+        if not result.ok:
+            return result
+
+        hand_size = len(self.player_hands[player_id])
+        if hand_size != 1:
+            self.uno_called_players.discard(player_id)
+            return result
+
+        if player_id in self.uno_called_players:
+            if "tay` roi" not in result.message:
+                result.message = f"{result.message} player {player_id + 1} tay` roi"
+            return result
+
+        penalty_cards = [self.draw_from_pile() for _ in range(2)]
+        self.player_hands[player_id].extend(penalty_cards)
+        self.uno_called_players.discard(player_id)
+        result.message = f"chua tay` dau! Player {player_id + 1} drew 2 cards."
+        result.uno_caught_player = player_id
+        result.uno_penalty_cards = penalty_cards
+        return result
+
+    def draw_for_decision(self, player_id: int) -> ActionResult:
+        if self.winner is not None:
+            return ActionResult(False, "Game is already over.")
+        if self.pending_effect is not None:
+            return ActionResult(False, "Resolve the pending effect first.")
+        if self.pending_draw_decision_card is not None:
+            return ActionResult(False, "Choose whether to play or keep the drawn card.")
+        if player_id != self.current_player:
+            return ActionResult(False, "Not this player's turn.")
+
+        if self.pending_draw_penalty_count > 0:
+            self.is_animating = True
+            result = self._draw_pending_penalty(player_id)
+            self._sync_uno_calls()
+            return result
+
+        legal_before_draw = self.get_legal_card_indices(player_id)
+        if legal_before_draw:
+            return ActionResult(False, "You can play a card; draw only when you have no legal move.")
+
+        drawn = self.draw_from_pile()
+        if self.is_legal_play(drawn):
+            self.pending_draw_decision_player = player_id
+            self.pending_draw_decision_card = drawn
+            return ActionResult(True, "Choose whether to play or keep the drawn card.", drew_card=drawn)
+
+        self.player_hands[player_id].append(drawn)
+        self._advance_turn(1)
+        self.is_animating = True
+        self._sync_uno_calls()
+        return ActionResult(True, "Drew one card and ended turn.", drew_card=drawn)
+
+    def keep_pending_draw_decision(self, player_id: int) -> ActionResult:
+        card = self.pending_draw_decision_card
+        if card is None or self.pending_draw_decision_player != player_id:
+            return ActionResult(False, "No drawn card is waiting for that player.")
+        if player_id != self.current_player:
+            return ActionResult(False, "Not this player's turn.")
+
+        self.pending_draw_decision_player = None
+        self.pending_draw_decision_card = None
+        self.player_hands[player_id].append(card)
+        self._advance_turn(1)
+        self.is_animating = True
+        self._sync_uno_calls()
+        return ActionResult(True, "Kept the drawn card and ended turn.", drew_card=card)
+
+    def play_pending_draw_decision(
+        self,
+        player_id: int,
+        chosen_color: Optional[str] = None,
+        timestamp_ms: Optional[int] = None,
+    ) -> ActionResult:
+        card = self.pending_draw_decision_card
+        if card is None or self.pending_draw_decision_player != player_id:
+            return ActionResult(False, "No drawn card is waiting for that player.")
+        if player_id != self.current_player:
+            return ActionResult(False, "Not this player's turn.")
+        if not self.is_legal_play(card):
+            return ActionResult(False, "The drawn card is no longer legal to play.")
+        if len(self.player_hands[player_id]) == 0 and self._is_forbidden_last_card(card):
+            return ActionResult(False, "You cannot win with that action card.")
+
+        if card.is_wild:
+            if chosen_color not in COLORS:
+                return ActionResult(False, "Wild cards require a chosen color.")
+        else:
+            chosen_color = card.color
+
+        self.pending_draw_decision_player = None
+        self.pending_draw_decision_card = None
+        self.is_animating = True
+        result = self._finish_played_card(player_id, card, chosen_color, timestamp_ms)
+        result.drew_card = card
+        return result
 
     def _handle_draw(self, player_id: int) -> ActionResult:
         self.is_animating = True
+        if self.pending_draw_penalty_count > 0:
+            result = self._draw_pending_penalty(player_id)
+            self._sync_uno_calls()
+            return result
+
         legal_before_draw = self.get_legal_card_indices(player_id)
         if legal_before_draw:
-            return ActionResult(False, "You must stack a draw card if you can.")
-
-        if self.pending_draw_penalty_count > 0:
-            return self._draw_pending_penalty(player_id)
+            return ActionResult(False, "You can play a card; draw only when you have no legal move.")
 
         drawn = self.draw_from_pile()
         self.player_hands[player_id].append(drawn)
 
         if self.is_legal_play(drawn):
             self.player_hands[player_id].pop()
-            self.discard_pile.append(drawn)
-
-            self.current_color = drawn.color if not drawn.is_wild else self.choose_color_for_player(player_id)
-
-            if len(self.player_hands[player_id]) == 1 and self._is_forbidden_last_card(drawn):
-                return ActionResult(True, "Drew an action card but cannot win with it; it stays in hand.", drew_card=drawn)
-
-            if len(self.player_hands[player_id]) == 0:
-                self.winner = player_id
-                return ActionResult(True, f"Player {player_id + 1} wins!", played_card=drawn, drew_card=drawn)
-
-            self._apply_played_card_effect(drawn)
-            return ActionResult(True, "Drew and auto-played a card.", played_card=drawn, drew_card=drawn)
+            chosen_color = drawn.color if not drawn.is_wild else self.choose_color_for_player(player_id)
+            result = self._finish_played_card(player_id, drawn, chosen_color)
+            result.drew_card = drawn
+            if result.ok and result.message == "Card played.":
+                result.message = "Drew and auto-played a card."
+            return result
 
         self._advance_turn(1)
+        self._sync_uno_calls()
         return ActionResult(True, "Drew one card and ended turn.", drew_card=drawn)
 
     def _apply_played_card_effect(self, card: Card) -> None:
@@ -325,6 +470,7 @@ class UnoGameManager:
         self.pending_draw_penalty_count = 0
         self.pending_draw_penalty_kind = None
         self._advance_turn(1)
+        self._sync_uno_calls()
         return ActionResult(True, f"Player {player_id + 1} drew {drawn_count} cards and lost the turn.")
 
     def _resolve_zero_direction(self, action: PlayerAction) -> ActionResult:
@@ -339,6 +485,7 @@ class UnoGameManager:
         self._pass_all_hands(self.hand_pass_direction)
         self.pending_effect = None
         self.pending_effect_player = None
+        self._sync_uno_calls()
 
         if effect_player is not None and len(self.player_hands[effect_player]) == 0:
             self.winner = effect_player
@@ -360,6 +507,7 @@ class UnoGameManager:
         self._swap_hands(action.player_id, action.target_player_id)
         self.pending_effect = None
         self.pending_effect_player = None
+        self._sync_uno_calls()
 
         if effect_player is not None and len(self.player_hands[effect_player]) == 0:
             self.winner = effect_player
@@ -386,6 +534,7 @@ class UnoGameManager:
         for target in punish_targets:
             for _ in range(2):
                 self.player_hands[target].append(self.draw_from_pile())
+        self._sync_uno_calls()
 
         self.pending_effect = None
         self.pending_effect_player = None
@@ -419,7 +568,14 @@ class UnoGameManager:
         )
 
     def _is_forbidden_last_card(self, card: Card) -> bool:
-        return card.kind in (ACTION_SKIP, ACTION_REVERSE, ACTION_DRAW_TWO, ACTION_WILD_DRAW_FOUR)
+        return card.kind in (ACTION_SKIP, ACTION_REVERSE, ACTION_DRAW_TWO, ACTION_WILD, ACTION_WILD_DRAW_FOUR)
+
+    def _sync_uno_calls(self) -> None:
+        self.uno_called_players = {
+            player_id
+            for player_id in self.uno_called_players
+            if 0 <= player_id < self.num_players and len(self.player_hands[player_id]) == 1
+        }
 
     def choose_color_for_player(self, player_id: int) -> str:
         color_counts = {c: 0 for c in COLORS}
@@ -436,7 +592,10 @@ class UnoGameManager:
         return card.kind in (ACTION_DRAW_TWO, ACTION_WILD_DRAW_FOUR)
 
     def is_waiting_for_input(self) -> bool:
-        return self.pending_effect in {RULE_ZERO_DIRECTION, RULE_SEVEN_TARGET, RULE_REACTION}
+        return (
+            self.pending_effect in {RULE_ZERO_DIRECTION, RULE_SEVEN_TARGET, RULE_REACTION}
+            or self.pending_draw_decision_card is not None
+        )
 
     def get_reaction_remaining_ms(self, now_ms: int) -> int:
         if self.pending_effect != RULE_REACTION or self.pending_reaction_due_ms is None:
