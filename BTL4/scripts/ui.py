@@ -766,12 +766,13 @@ def get_title_screen_button_rects(screen_rect: pygame.Rect) -> dict[str, pygame.
     button_w = 320
     button_h = 90
     gap = 28
-    y_start = screen_rect.centery + 80
+    y_start = screen_rect.centery + 24
 
     return {
         "start_local": pygame.Rect(screen_rect.centerx - button_w // 2, y_start, button_w, button_h),
-        "host_game": pygame.Rect(screen_rect.centerx - button_w // 2, y_start + button_h + gap, button_w, button_h),
-        "join_game": pygame.Rect(screen_rect.centerx - button_w // 2, y_start + 2 * (button_h + gap), button_w, button_h),
+        "multiplayer": pygame.Rect(screen_rect.centerx - button_w // 2, y_start + button_h + gap, button_w, button_h),
+        "settings": pygame.Rect(screen_rect.centerx - button_w // 2, y_start + 2 * (button_h + gap), button_w, button_h),
+        "quit": pygame.Rect(screen_rect.centerx - button_w // 2, y_start + 3 * (button_h + gap), button_w, button_h),
     }
 
 
@@ -795,8 +796,43 @@ def render_title_screen(screen: pygame.Surface) -> None:
     button_rects = get_title_screen_button_rects(screen_rect)
 
     _draw_button(screen, button_rects["start_local"], "Start Local Match", (75, 175, 90))
+    _draw_button(screen, button_rects["multiplayer"], "Multiplayer", (233, 126, 68), border=(160, 100, 50))
+    _draw_button(screen, button_rects["settings"], "Settings", (214, 190, 82), border=(160, 135, 40))
+    _draw_button(screen, button_rects["quit"], "Quit", (200, 100, 100), border=(220, 130, 100))
+
+
+def get_multiplayer_screen_button_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
+    """Get button rectangles for the multiplayer submenu."""
+    button_w = 320
+    button_h = 90
+    gap = 28
+    y_start = screen_rect.centery + 24
+
+    return {
+        "host_game": pygame.Rect(screen_rect.centerx - button_w // 2, y_start, button_w, button_h),
+        "join_game": pygame.Rect(screen_rect.centerx - button_w // 2, y_start + button_h + gap, button_w, button_h),
+        "back": pygame.Rect(screen_rect.centerx - button_w // 2, y_start + 2 * (button_h + gap), button_w, button_h),
+    }
+
+
+def render_multiplayer_screen(screen: pygame.Surface) -> None:
+    """Render the multiplayer submenu screen."""
+    width, height = screen.get_size()
+    screen.fill((24, 28, 34))
+
+    title_font = pygame.font.SysFont("consolas", 86, bold=True)
+    title = title_font.render("MULTIPLAYER", True, (255, 255, 255))
+    screen.blit(title, title.get_rect(center=(width // 2, height // 2 - 180)))
+
+    subtitle_font = pygame.font.SysFont("consolas", 36)
+    subtitle = subtitle_font.render("Online menu", True, (180, 180, 180))
+    screen.blit(subtitle, subtitle.get_rect(center=(width // 2, height // 2 - 100)))
+
+    screen_rect = screen.get_rect()
+    button_rects = get_multiplayer_screen_button_rects(screen_rect)
     _draw_button(screen, button_rects["host_game"], "Host Game", (233, 126, 68), border=(160, 100, 50))
     _draw_button(screen, button_rects["join_game"], "Join Game", (75, 125, 215), border=(50, 90, 150))
+    _draw_button(screen, button_rects["back"], "Back", (100, 100, 110), border=(130, 130, 140))
 
     # Footer
     footer_font = pygame.font.SysFont("consolas", 18)

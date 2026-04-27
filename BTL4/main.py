@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pygame
 
-from scripts.screens import TitleScreen
+from scripts.screens import AudioSettings, TitleScreen
 from scripts.sprites import CardSpriteAtlas
 
 DEFAULT_SCREEN_SIZE = (1920, 1080)
@@ -20,16 +20,18 @@ def main() -> None:
     atlas = CardSpriteAtlas(
         Path("assets") / "sprites" / "PC _ Computer - UNO - Cards - Cards (Classic).png"
     )
+    audio_settings = AudioSettings()
     bgm_path = Path("assets") / "bgm" / "domixi tay bac.mp3"
     pygame.mixer.music.load(str(bgm_path))
-    pygame.mixer.music.set_volume(0.18)
+    pygame.mixer.music.set_volume(audio_settings.music_mix())
 
-    current_screen = TitleScreen(atlas)
+    current_screen = TitleScreen(atlas, audio_settings)
     bgm_playing = False
 
     running = True
     while running:
         now = pygame.time.get_ticks()
+        pygame.mixer.music.set_volume(audio_settings.music_mix())
 
         if current_screen.wants_bgm:
             if not bgm_playing:
