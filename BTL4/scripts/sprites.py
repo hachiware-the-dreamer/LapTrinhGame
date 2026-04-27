@@ -25,7 +25,12 @@ class CardSpriteAtlas:
 
     def __init__(self, sprite_sheet_path: Path):
         self.sprite_sheet_path = sprite_sheet_path
-        self.sheet = pygame.image.load(str(sprite_sheet_path)).convert_alpha()
+        if not sprite_sheet_path.exists():
+            raise FileNotFoundError(f"Required UNO card atlas is missing: {sprite_sheet_path}")
+        try:
+            self.sheet = pygame.image.load(str(sprite_sheet_path)).convert_alpha()
+        except pygame.error as exc:
+            raise pygame.error(f"Could not load required UNO card atlas: {sprite_sheet_path}") from exc
         self.card_map = self._build_card_map()
         self.cache: Dict[Tuple[str, int, int], pygame.Surface] = {}
 
@@ -41,7 +46,15 @@ class CardSpriteAtlas:
         # Positions below are the recalculated row / column slots from the atlas image.
         return {
             (None, ACTION_WILD, None): (0, 1),
+            ("yellow", ACTION_WILD, None): (0, 2),
+            ("red", ACTION_WILD, None): (0, 3),
+            ("blue", ACTION_WILD, None): (0, 4),
+            ("green", ACTION_WILD, None): (0, 5),
             (None, ACTION_WILD_DRAW_FOUR, None): (0, 6),
+            ("yellow", ACTION_WILD_DRAW_FOUR, None): (0, 7),
+            ("red", ACTION_WILD_DRAW_FOUR, None): (0, 8),
+            ("blue", ACTION_WILD_DRAW_FOUR, None): (0, 9),
+            ("green", ACTION_WILD_DRAW_FOUR, None): (0, 10),
             ("yellow", "number", 1): (1, 0),
             ("yellow", "number", 2): (1, 1),
             ("yellow", "number", 3): (1, 2),
@@ -97,6 +110,9 @@ class CardSpriteAtlas:
         }
 
     def _card_key(self, card: Card) -> Tuple[Optional[str], str, Optional[int]]:
+        if card.is_wild:
+            # Wild cards in this atlas have dedicated per-color variants on row 0.
+            return (card.chosen_color, card.kind, None)
         if card.kind == "number":
             return (card.color, card.kind, card.number)
         return (card.color, card.kind, None)
@@ -187,7 +203,5 @@ class CardSpriteAtlas:
         image = self.sheet.subsurface(src).copy()
         scaled = pygame.transform.smoothscale(image, (width, height))
         rounded = self._apply_rounded_corners(scaled)
-        if chosen_color is not None:
-            rounded = self._apply_wild_color_choice(rounded, chosen_color)
         self.cache[cache_key] = rounded
         return rounded

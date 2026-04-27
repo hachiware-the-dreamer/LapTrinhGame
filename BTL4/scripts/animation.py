@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -52,8 +53,47 @@ class ActiveCard:
     rotation_speed: float = 7.5
     scale_speed: float = 8.5
     reveal_hand_card: bool = False
+    start_pos: tuple[float, float] | None = None
+    start_rotation: float | None = None
+    start_scale: float | None = None
+    duration: float = 0.24
+    elapsed: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.start_pos is None:
+            self.start_pos = self.current_pos
+        if self.start_rotation is None:
+            self.start_rotation = self.current_rotation
+        if self.start_scale is None:
+            self.start_scale = self.current_scale
+
+    @property
+    def progress(self) -> float:
+        if self.duration <= 0.0:
+            return 1.0
+        return max(0.0, min(1.0, self.elapsed / self.duration))
 
     def update(self, dt: float) -> bool:
+        if self.kind in ("play", "draw"):
+            self.elapsed += max(0.0, dt)
+            t = self.progress
+            # Ease out quickly so played cards feel snappier and more responsive.
+            move_t = 1.0 - pow(1.0 - t, 3)
+
+            assert self.start_pos is not None
+            assert self.start_rotation is not None
+            assert self.start_scale is not None
+            self.current_pos = lerp_point(self.start_pos, self.target_pos, move_t)
+            self.current_rotation = lerp(self.start_rotation, self.target_rotation, move_t)
+
+            if self.kind == "play":
+                pop = 0.16 * math.sin(math.pi * t)
+                self.current_scale = lerp(self.start_scale, self.target_scale, move_t) + pop
+            else:
+                self.current_scale = lerp(self.start_scale, self.target_scale, move_t)
+
+            return t >= 1.0
+
         travel = smooth_factor(dt, self.travel_speed)
         rotate = smooth_factor(dt, self.rotation_speed)
         scale = smooth_factor(dt, self.scale_speed)

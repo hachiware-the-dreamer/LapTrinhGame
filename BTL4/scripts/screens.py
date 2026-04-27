@@ -1,13 +1,13 @@
 import random
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 import pygame
 
 from scripts.animation import ActiveCard, lerp, lerp_point, smooth_factor, transform_card_surface
+from scripts.assets import asset_path
 from scripts.ai import AITurnOutcome, perform_simple_ai_turn
-from scripts.cards import Card
+from scripts.cards import ACTION_WILD_DRAW_FOUR, Card
 from scripts.game_manager import (
     GameSettings,
     PlayerAction,
@@ -21,6 +21,9 @@ from scripts.game_manager import (
 from scripts.sprites import CardSpriteAtlas
 from scripts.ui import (
     card_rect_for_hand,
+    draw_theme_background,
+    draw_theme_button,
+    draw_theme_panel,
     get_card_rect_from_pos,
     get_draw_decision_button_rects,
     get_draw_pile_rect,
@@ -29,6 +32,7 @@ from scripts.ui import (
     get_discard_pile_rect,
     get_player_anchor_point,
     get_player_card_rotation,
+    get_player_hand_rotation,
     get_player_hand_card_rects,
     get_reaction_button_rect,
     get_rule_seven_target_rects,
@@ -41,20 +45,21 @@ from scripts.ui import (
     render_multiplayer_screen,
     render_title_screen,
     render_ui,
+    theme_font,
 )
 
 STATE_TITLE = "title"
 STATE_PLAYING = "playing"
 STATE_END = "end"
 HAND_TRANSFER_ANIMATION = "Hand_Transfer_Animation"
-SETTINGS_BG_COLOR = (24, 28, 34)
-SETTINGS_ACTIVE_FILL = (75, 175, 90)
-SETTINGS_ACTIVE_BORDER = (100, 200, 100)
-SETTINGS_IDLE_FILL = (100, 100, 110)
-SETTINGS_IDLE_BORDER = (130, 130, 140)
-SETTINGS_DANGER_FILL = (200, 100, 100)
-SETTINGS_DANGER_BORDER = (220, 130, 100)
-SETTINGS_LABEL_X_OFFSET = 500
+SETTINGS_BG_COLOR = (10, 18, 28)
+SETTINGS_ACTIVE_FILL = (65, 175, 95)
+SETTINGS_ACTIVE_BORDER = (164, 235, 178)
+SETTINGS_IDLE_FILL = (84, 94, 110)
+SETTINGS_IDLE_BORDER = (146, 158, 174)
+SETTINGS_DANGER_FILL = (225, 55, 55)
+SETTINGS_DANGER_BORDER = (246, 166, 166)
+SETTINGS_LABEL_X_OFFSET = 430
 SETTINGS_SLIDER_WIDTH = 400
 
 
@@ -232,11 +237,7 @@ class GameSettingsScreen(BaseScreen):
         fill: tuple[int, int, int],
         border: tuple[int, int, int],
     ) -> None:
-        pygame.draw.rect(screen, fill, rect, border_radius=12)
-        pygame.draw.rect(screen, border, rect, width=3, border_radius=12)
-        font = pygame.font.SysFont("consolas", 24, bold=True)
-        text = font.render(label, True, (20, 20, 20))
-        screen.blit(text, text.get_rect(center=rect.center))
+        draw_theme_button(screen, rect, label, fill, border)
 
     @staticmethod
     def _section_x(screen_rect: pygame.Rect) -> int:
@@ -247,7 +248,7 @@ class GameSettingsScreen(BaseScreen):
         button_w = 240
         button_h = 64
         spacing = 40
-        y = screen_rect.height - button_h - 28
+        y = screen_rect.height - button_h - 50
         total_width = button_w * 2 + spacing
         left_x = screen_rect.centerx - total_width // 2
         return {
@@ -257,7 +258,7 @@ class GameSettingsScreen(BaseScreen):
 
     @staticmethod
     def _get_player_count_rects(screen_rect: pygame.Rect) -> dict[int, pygame.Rect]:
-        start_y = 165
+        start_y = max(150, int(screen_rect.height * 0.19))
         button_w = 86
         button_h = 70
         spacing = 60
@@ -270,11 +271,11 @@ class GameSettingsScreen(BaseScreen):
 
     @staticmethod
     def _get_initial_cards_slider_rect(screen_rect: pygame.Rect) -> pygame.Rect:
-        return pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, 320, SETTINGS_SLIDER_WIDTH, 30)
+        return pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, int(screen_rect.height * 0.34), SETTINGS_SLIDER_WIDTH, 30)
 
     @staticmethod
     def _get_rule_toggle_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
-        start_y = 445
+        start_y = int(screen_rect.height * 0.51)
         button_w = 120
         button_h = 60
         spacing = 26
@@ -287,11 +288,11 @@ class GameSettingsScreen(BaseScreen):
 
     @staticmethod
     def _get_rule_8_timer_slider_rect(screen_rect: pygame.Rect) -> pygame.Rect:
-        return pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, 585, SETTINGS_SLIDER_WIDTH, 30)
+        return pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, int(screen_rect.height * 0.66), SETTINGS_SLIDER_WIDTH, 30)
 
     @staticmethod
     def _get_two_player_behavior_rects(screen_rect: pygame.Rect, show_rule_8_timer: bool) -> dict[str, pygame.Rect]:
-        start_y = 715 if show_rule_8_timer else 585
+        start_y = int(screen_rect.height * (0.79 if show_rule_8_timer else 0.66))
         button_width = 180
         button_height = 60
         spacing = 30
@@ -303,10 +304,12 @@ class GameSettingsScreen(BaseScreen):
 
     @classmethod
     def _draw_slider(cls, screen: pygame.Surface, rect: pygame.Rect, value_ratio: float) -> None:
-        pygame.draw.rect(screen, (60, 60, 70), rect, border_radius=8)
+        pygame.draw.rect(screen, (31, 40, 52), rect, border_radius=8)
         pygame.draw.rect(screen, SETTINGS_IDLE_BORDER, rect, width=2, border_radius=8)
         knob_x = rect.x + value_ratio * rect.width
-        pygame.draw.circle(screen, SETTINGS_ACTIVE_BORDER, (int(knob_x), rect.centery), 15)
+        pygame.draw.circle(screen, (0, 0, 0), (int(knob_x), rect.centery + 2), 17)
+        pygame.draw.circle(screen, SETTINGS_ACTIVE_FILL, (int(knob_x), rect.centery), 15)
+        pygame.draw.circle(screen, SETTINGS_ACTIVE_BORDER, (int(knob_x), rect.centery), 15, width=2)
 
     def handle_events(
         self,
@@ -397,40 +400,48 @@ class GameSettingsScreen(BaseScreen):
         return ScreenResult()
 
     def draw(self, screen: pygame.Surface, now_ms: int) -> None:
-        screen.fill(SETTINGS_BG_COLOR)
+        draw_theme_background(screen)
         screen_rect = screen.get_rect()
         section_x = self._section_x(screen_rect)
 
-        font_title = pygame.font.SysFont("consolas", 72, bold=True)
-        font_section = pygame.font.SysFont("consolas", 36, bold=True)
-        font_label = pygame.font.SysFont("consolas", 28)
+        font_title = theme_font(screen_rect.width, screen_rect.height, 72, bold=True)
+        font_section = theme_font(screen_rect.width, screen_rect.height, 34, bold=True)
+        font_label = theme_font(screen_rect.width, screen_rect.height, 28)
+
+        panel_top = max(92, int(screen_rect.height * 0.13))
+        panel_bottom = screen_rect.height - 36
+        panel_rect = pygame.Rect(0, panel_top, min(1020, screen_rect.width - 96), panel_bottom - panel_top)
+        panel_rect.centerx = screen_rect.centerx
+        draw_theme_panel(screen, panel_rect, alpha=142)
 
         title = font_title.render("GAME SETTINGS", True, (255, 255, 255))
-        screen.blit(title, title.get_rect(midtop=(screen_rect.centerx, 20)))
+        screen.blit(title, title.get_rect(midtop=(screen_rect.centerx, max(18, int(screen_rect.height * 0.032)))))
 
         label = font_section.render("Players:", True, (255, 255, 255))
-        screen.blit(label, (section_x, 130))
-        for count, rect in self._get_player_count_rects(screen_rect).items():
+        player_rects = self._get_player_count_rects(screen_rect)
+        screen.blit(label, (section_x, player_rects[2].y - 46))
+        for count, rect in player_rects.items():
             fill = SETTINGS_ACTIVE_FILL if count == self.settings.num_players else SETTINGS_IDLE_FILL
             border = SETTINGS_ACTIVE_BORDER if count == self.settings.num_players else SETTINGS_IDLE_BORDER
             self._draw_button(screen, rect, str(count), fill, border)
 
         label = font_section.render("Initial Cards:", True, (255, 255, 255))
-        screen.blit(label, (section_x, 270))
         slider_rect = self._get_initial_cards_slider_rect(screen_rect)
+        screen.blit(label, (section_x, slider_rect.y - 54))
         self._draw_slider(screen, slider_rect, (self.settings.initial_cards - 2) / 13)
         cards_text = font_label.render(f"{self.settings.initial_cards}", True, (255, 255, 255))
         screen.blit(cards_text, (slider_rect.right + 40, slider_rect.centery - 14))
 
         label = font_section.render("Rules:", True, (255, 255, 255))
-        screen.blit(label, (section_x, 390))
+        rule_rects = self._get_rule_toggle_rects(screen_rect)
+        screen.blit(label, (section_x, rule_rects["rule_0"].y - 54))
         rule_labels = {"rule_0": "Rule 0", "rule_7": "Rule 7", "rule_8": "Rule 8"}
         rule_states = {
             "rule_0": self.settings.rule_0_enabled,
             "rule_7": self.settings.rule_7_enabled,
             "rule_8": self.settings.rule_8_enabled,
         }
-        for key, rect in self._get_rule_toggle_rects(screen_rect).items():
+        for key, rect in rule_rects.items():
             enabled = rule_states[key]
             fill = SETTINGS_ACTIVE_FILL if enabled else SETTINGS_IDLE_FILL
             border = SETTINGS_ACTIVE_BORDER if enabled else SETTINGS_IDLE_BORDER
@@ -439,7 +450,7 @@ class GameSettingsScreen(BaseScreen):
         if self.settings.rule_8_enabled:
             timer_rect = self._get_rule_8_timer_slider_rect(screen_rect)
             label = font_section.render("Rule 8 Timer (ms):", True, (255, 255, 255))
-            screen.blit(label, (section_x, timer_rect.y - 60))
+            screen.blit(label, (section_x, timer_rect.y - 54))
             self._draw_slider(screen, timer_rect, (self.settings.rule_8_reaction_timer_ms - 1000) / 4000)
             timer_text = font_label.render(f"{self.settings.rule_8_reaction_timer_ms}ms", True, (255, 255, 255))
             screen.blit(timer_text, (timer_rect.right + 40, timer_rect.centery - 14))
@@ -450,7 +461,7 @@ class GameSettingsScreen(BaseScreen):
                 show_rule_8_timer=self.settings.rule_8_enabled,
             )
             label = font_section.render("2-Player Reverse:", True, (255, 255, 255))
-            screen.blit(label, (section_x, behavior_rects["skip"].y - 60))
+            screen.blit(label, (section_x, behavior_rects["skip"].y - 54))
             for behavior, rect in behavior_rects.items():
                 selected = behavior == self.settings.two_player_reverse_behavior
                 fill = SETTINGS_ACTIVE_FILL if selected else SETTINGS_IDLE_FILL
@@ -482,8 +493,8 @@ class MainSettingsScreen(BaseScreen):
 
     @staticmethod
     def _slider_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
-        start_y = 285
-        row_gap = 155
+        start_y = int(screen_rect.height * 0.28)
+        row_gap = int(screen_rect.height * 0.17)
         return {
             "master": pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, start_y, SETTINGS_SLIDER_WIDTH, 30),
             "music": pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, start_y + row_gap, SETTINGS_SLIDER_WIDTH, 30),
@@ -494,7 +505,7 @@ class MainSettingsScreen(BaseScreen):
     def _button_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
         button_w = 240
         button_h = 64
-        y = screen_rect.height - button_h - 28
+        y = screen_rect.height - button_h - 50
         return {
             "back": pygame.Rect(screen_rect.centerx - button_w // 2, y, button_w, button_h),
         }
@@ -541,15 +552,21 @@ class MainSettingsScreen(BaseScreen):
         return ScreenResult()
 
     def draw(self, screen: pygame.Surface, now_ms: int) -> None:
-        screen.fill(SETTINGS_BG_COLOR)
+        draw_theme_background(screen)
         screen_rect = screen.get_rect()
         section_x = GameSettingsScreen._section_x(screen_rect)
-        font_title = pygame.font.SysFont("consolas", 72, bold=True)
-        font_section = pygame.font.SysFont("consolas", 36, bold=True)
-        font_label = pygame.font.SysFont("consolas", 28)
+        font_title = theme_font(screen_rect.width, screen_rect.height, 72, bold=True)
+        font_section = theme_font(screen_rect.width, screen_rect.height, 34, bold=True)
+        font_label = theme_font(screen_rect.width, screen_rect.height, 28)
+
+        panel_top = max(92, int(screen_rect.height * 0.13))
+        panel_bottom = screen_rect.height - 36
+        panel_rect = pygame.Rect(0, panel_top, min(900, screen_rect.width - 96), panel_bottom - panel_top)
+        panel_rect.centerx = screen_rect.centerx
+        draw_theme_panel(screen, panel_rect, alpha=142)
 
         title = font_title.render("MAIN SETTINGS", True, (255, 255, 255))
-        screen.blit(title, title.get_rect(midtop=(screen_rect.centerx, 20)))
+        screen.blit(title, title.get_rect(midtop=(screen_rect.centerx, max(18, int(screen_rect.height * 0.032)))))
 
         slider_rects = self._slider_rects(screen_rect)
         slider_rows = (
@@ -560,7 +577,7 @@ class MainSettingsScreen(BaseScreen):
         for key, label_text, value in slider_rows:
             rect = slider_rects[key]
             label = font_section.render(label_text, True, (255, 255, 255))
-            screen.blit(label, (section_x, rect.y - 60))
+            screen.blit(label, (section_x, rect.y - 54))
             GameSettingsScreen._draw_slider(screen, rect, value)
             value_text = font_label.render(f"{int(round(value * 100))}%", True, (255, 255, 255))
             screen.blit(value_text, (rect.right + 40, rect.centery - 14))
@@ -575,6 +592,9 @@ class PlayingScreen(BaseScreen):
     DIRECTION_ARROW_BASE_SPEED = 90.0
     DIRECTION_ARROW_ACCEL = 4.5
     DIRECTION_ARROW_DECEL = 2.5
+    SHAKE_DURATION_MS = 260
+    SHAKE_MAX_OFFSET = 10
+    PAUSE_MENU_OPTIONS = ("resume", "return_title")
 
     def __init__(
         self,
@@ -609,6 +629,11 @@ class PlayingScreen(BaseScreen):
         self.pending_draw_decision_card: Card | None = None
         self.pending_draw_decision_choosing_color = False
         self.uno_catch_sound = self._load_uno_catch_sound()
+        self.pause_menu_open = False
+        self.pause_selected_index = 0
+        self.pause_hovered_button: str | None = None
+        self.screen_shake_remaining_ms = 0
+        self.screen_shake_offset: tuple[int, int] = (0, 0)
 
     @property
     def wants_bgm(self) -> bool:
@@ -620,15 +645,32 @@ class PlayingScreen(BaseScreen):
         screen: pygame.Surface,
         now_ms: int,
     ) -> ScreenResult:
-        if self.hand_transfer_animation is not None:
-            for event in events:
-                if event.type == pygame.QUIT:
-                    return ScreenResult(running=False)
-            return ScreenResult()
-
         for event in events:
             if event.type == pygame.QUIT:
                 return ScreenResult(running=False)
+
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                if self.pause_menu_open:
+                    self.pause_menu_open = False
+                    self.pause_hovered_button = None
+                    self.last_message = "Game resumed."
+                    continue
+
+                if self.game.winner is None and not self._has_modal_input():
+                    self.pause_menu_open = True
+                    self.pause_selected_index = 0
+                    self.pause_hovered_button = None
+                    self.last_message = "Game paused."
+                    continue
+
+            if self.pause_menu_open:
+                pause_result = self._handle_pause_menu_event(event, screen)
+                if pause_result is not None:
+                    return pause_result
+                continue
+
+            if self.hand_transfer_animation is not None:
+                continue
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.game.winner is None:
                 self._handle_mouse_down(event.pos, screen, now_ms)
@@ -645,6 +687,13 @@ class PlayingScreen(BaseScreen):
     def update(self, screen: pygame.Surface, now_ms: int) -> Optional[BaseScreen]:
         dt = 0.0 if self._last_update_ms is None else max(0.0, (now_ms - self._last_update_ms) / 1000.0)
         self._last_update_ms = now_ms
+        self._update_screen_shake(dt)
+
+        if self.game.winner is not None:
+            return EndScreen(self.atlas, self.game, self.audio_settings)
+
+        if self.pause_menu_open:
+            return None
 
         self._schedule_reaction_ai(now_ms)
         self._submit_ai_reactions(now_ms)
@@ -703,20 +752,21 @@ class PlayingScreen(BaseScreen):
                 previous_player = self.game.current_player
                 ai_turn = perform_simple_ai_turn(self.game, now_ms=now_ms)
                 self.last_message = ai_turn.message
-                if ai_turn.result is not None and ai_turn.result.uno_caught_player is not None:
+                if ai_turn.result is not None and getattr(ai_turn.result, "uno_caught_player", None) is not None:
                     self._play_uno_catch_sound()
                 self._spawn_ai_animation(previous_player, ai_turn, screen, now_ms)
                 ai_delay = self.ai_rng.randint(1000, 1500)
                 self.next_ai_time = now_ms + ai_delay
 
-        if self.game.winner is not None:
-            return EndScreen(self.atlas, self.game, self.audio_settings)
-
         return None
 
     def draw(self, screen: pygame.Surface, now_ms: int) -> None:
+        render_target = screen
+        if self.screen_shake_remaining_ms > 0:
+            render_target = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+
         render_ui(
-            screen,
+            render_target,
             self.game,
             self.atlas,
             now_ms,
@@ -730,8 +780,147 @@ class PlayingScreen(BaseScreen):
             wild_hovered_color=self.wild_hovered_color,
             draw_decision_card=self.pending_draw_decision_card,
         )
-        self._draw_active_cards(screen)
-        self._draw_hand_transfer_cards(screen)
+        self._draw_active_cards(render_target)
+        self._draw_hand_transfer_cards(render_target)
+
+        if render_target is not screen:
+            upscale_margin = 12
+            scaled = pygame.transform.smoothscale(
+                render_target,
+                (screen.get_width() + upscale_margin, screen.get_height() + upscale_margin),
+            )
+            scaled_rect = scaled.get_rect(
+                center=(
+                    screen.get_width() // 2 + self.screen_shake_offset[0],
+                    screen.get_height() // 2 + self.screen_shake_offset[1],
+                )
+            )
+            screen.blit(scaled, scaled_rect)
+
+        if self.pause_menu_open:
+            self._draw_pause_menu(screen)
+
+    def _trigger_screen_shake(self, duration_ms: int | None = None) -> None:
+        self.screen_shake_remaining_ms = max(self.screen_shake_remaining_ms, duration_ms or self.SHAKE_DURATION_MS)
+
+    def _update_screen_shake(self, dt: float) -> None:
+        if self.screen_shake_remaining_ms <= 0:
+            self.screen_shake_remaining_ms = 0
+            self.screen_shake_offset = (0, 0)
+            return
+
+        self.screen_shake_remaining_ms = max(0, self.screen_shake_remaining_ms - int(dt * 1000.0))
+        intensity = max(1.0, (self.screen_shake_remaining_ms / self.SHAKE_DURATION_MS) * self.SHAKE_MAX_OFFSET)
+        self.screen_shake_offset = (
+            int(self.ai_rng.uniform(-intensity, intensity)),
+            int(self.ai_rng.uniform(-intensity, intensity)),
+        )
+
+    @staticmethod
+    def _pause_button_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
+        panel_width = min(560, screen_rect.width - 120)
+        panel_height = 340
+        panel_rect = pygame.Rect(0, 0, panel_width, panel_height)
+        panel_rect.center = screen_rect.center
+
+        button_w = min(340, panel_rect.width - 80)
+        button_h = 66
+        gap = 24
+        left = panel_rect.centerx - button_w // 2
+        first_y = panel_rect.y + 150
+        return {
+            "resume": pygame.Rect(left, first_y, button_w, button_h),
+            "return_title": pygame.Rect(left, first_y + button_h + gap, button_w, button_h),
+        }
+
+    def _handle_pause_menu_event(
+        self,
+        event: pygame.event.Event,
+        screen: pygame.Surface,
+    ) -> Optional[ScreenResult]:
+        button_rects = self._pause_button_rects(screen.get_rect())
+
+        if event.type == pygame.MOUSEMOTION:
+            self.pause_hovered_button = None
+            for button_name, rect in button_rects.items():
+                if rect.collidepoint(event.pos):
+                    self.pause_hovered_button = button_name
+                    self.pause_selected_index = self.PAUSE_MENU_OPTIONS.index(button_name)
+                    break
+            return None
+
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.pause_selected_index = (self.pause_selected_index - 1) % len(self.PAUSE_MENU_OPTIONS)
+                self.pause_hovered_button = None
+                return None
+
+            if event.key in (pygame.K_DOWN, pygame.K_s):
+                self.pause_selected_index = (self.pause_selected_index + 1) % len(self.PAUSE_MENU_OPTIONS)
+                self.pause_hovered_button = None
+                return None
+
+            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                selected = self.PAUSE_MENU_OPTIONS[self.pause_selected_index]
+                return self._activate_pause_menu_option(selected)
+            return None
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for button_name, rect in button_rects.items():
+                if rect.collidepoint(event.pos):
+                    return self._activate_pause_menu_option(button_name)
+
+        return None
+
+    def _activate_pause_menu_option(self, option: str) -> ScreenResult:
+        if option == "resume":
+            self.pause_menu_open = False
+            self.pause_hovered_button = None
+            self.last_message = "Game resumed."
+            return ScreenResult()
+
+        if option == "return_title":
+            self.pause_menu_open = False
+            self.pause_hovered_button = None
+            return ScreenResult(next_screen=TitleScreen(self.atlas, self.audio_settings))
+
+        return ScreenResult()
+
+    def _draw_pause_menu(self, screen: pygame.Surface) -> None:
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((8, 12, 18, 185))
+        screen.blit(overlay, (0, 0))
+
+        screen_rect = screen.get_rect()
+        panel_width = min(560, screen_rect.width - 120)
+        panel_height = 340
+        panel_rect = pygame.Rect(0, 0, panel_width, panel_height)
+        panel_rect.center = screen_rect.center
+
+        draw_theme_panel(screen, panel_rect, alpha=230)
+
+        title_font = theme_font(screen_rect.width, screen_rect.height, 48, bold=True)
+        hint_font = theme_font(screen_rect.width, screen_rect.height, 24)
+        title_text = title_font.render("PAUSE MENU", True, (245, 245, 245))
+        hint_text = hint_font.render("Esc: Resume", True, (200, 210, 220))
+        screen.blit(title_text, title_text.get_rect(center=(panel_rect.centerx, panel_rect.y + 62)))
+        screen.blit(hint_text, hint_text.get_rect(center=(panel_rect.centerx, panel_rect.y + 106)))
+
+        labels = {
+            "resume": "RESUME",
+            "return_title": "RETURN TO TITLE",
+        }
+        for idx, option in enumerate(self.PAUSE_MENU_OPTIONS):
+            rect = self._pause_button_rects(screen_rect)[option]
+            is_selected = idx == self.pause_selected_index
+            is_hovered = option == self.pause_hovered_button
+            if option == "return_title":
+                fill = SETTINGS_DANGER_FILL if (is_selected or is_hovered) else SETTINGS_IDLE_FILL
+                border = SETTINGS_DANGER_BORDER if (is_selected or is_hovered) else SETTINGS_IDLE_BORDER
+            else:
+                fill = SETTINGS_ACTIVE_FILL if (is_selected or is_hovered) else SETTINGS_IDLE_FILL
+                border = SETTINGS_ACTIVE_BORDER if (is_selected or is_hovered) else SETTINGS_IDLE_BORDER
+            GameSettingsScreen._draw_button(screen, rect, labels[option], fill, border)
 
     def _schedule_reaction_ai(self, now_ms: int) -> None:
         if self.game.pending_effect == RULE_REACTION:
@@ -979,7 +1168,7 @@ class PlayingScreen(BaseScreen):
 
     def _record_player_action_result(self, result, now_ms: int) -> None:
         self.last_message = result.message
-        if result.ok and result.uno_caught_player is not None:
+        if result.ok and getattr(result, "uno_caught_player", None) is not None:
             self._play_uno_catch_sound()
         # Prevent same-frame AI actions from hiding turn transitions (e.g., after Reverse).
         if result.ok and self.game.winner is None and self.game.current_player != 0:
@@ -988,8 +1177,11 @@ class PlayingScreen(BaseScreen):
     def _load_uno_catch_sound(self) -> pygame.mixer.Sound | None:
         if not pygame.mixer.get_init():
             return None
+        sound_path = asset_path("sfx", "woww.mp3")
+        if not sound_path.exists():
+            return None
         try:
-            sound = pygame.mixer.Sound(str(Path("assets") / "sfx" / "woww.mp3"))
+            sound = pygame.mixer.Sound(str(sound_path))
             sound.set_volume(self.audio_settings.sfx_mix(0.75))
             return sound
         except pygame.error:
@@ -1207,7 +1399,7 @@ class PlayingScreen(BaseScreen):
                     target_pos=get_discard_pile_rect(screen_rect).center,
                     start_rotation=get_player_card_rotation(player_id, self.game.num_players),
                     target_rotation=get_player_card_rotation(player_id, self.game.num_players)
-                    + self.ai_rng.uniform(-12.0, 12.0),
+                    + self.ai_rng.uniform(-15.0, 15.0),
                 )
             self._spawn_uno_penalty_animation(result, screen)
             return
@@ -1222,7 +1414,7 @@ class PlayingScreen(BaseScreen):
                     start_pos=get_draw_pile_rect(screen.get_width(), screen.get_height()).center,
                     target_pos=get_discard_pile_rect(screen_rect).center,
                     start_rotation=0.0,
-                    target_rotation=self.ai_rng.uniform(-12.0, 12.0),
+                    target_rotation=self.ai_rng.uniform(-15.0, 15.0),
                 )
                 self._spawn_uno_penalty_animation(result, screen)
                 return
@@ -1252,7 +1444,7 @@ class PlayingScreen(BaseScreen):
                 target_pos=get_discard_pile_rect(screen.get_rect()).center,
                 start_rotation=get_player_card_rotation(player_id, self.game.num_players),
                 target_rotation=get_player_card_rotation(player_id, self.game.num_players)
-                + self.ai_rng.uniform(-12.0, 12.0),
+                + self.ai_rng.uniform(-15.0, 15.0),
             )
             if outcome.result is not None:
                 self._spawn_uno_penalty_animation(outcome.result, screen)
@@ -1280,21 +1472,22 @@ class PlayingScreen(BaseScreen):
                 start_pos=get_draw_pile_rect(screen.get_width(), screen.get_height()).center,
                 target_pos=get_discard_pile_rect(screen.get_rect()).center,
                 start_rotation=0.0,
-                target_rotation=self.ai_rng.uniform(-12.0, 12.0),
+                target_rotation=self.ai_rng.uniform(-15.0, 15.0),
             )
             if outcome.result is not None:
                 self._spawn_uno_penalty_animation(outcome.result, screen)
 
     def _spawn_uno_penalty_animation(self, result, screen: pygame.Surface) -> None:
-        player_id = result.uno_caught_player
-        if player_id is None or not result.uno_penalty_cards:
+        player_id = getattr(result, "uno_caught_player", None)
+        penalty_cards = getattr(result, "uno_penalty_cards", None) or []
+        if player_id is None or not penalty_cards:
             return
 
         screen_rect = screen.get_rect()
         draw_center = get_draw_pile_rect(screen.get_width(), screen.get_height()).center
         target_center = get_player_anchor_point(screen_rect, player_id, self.game.num_players)
 
-        for offset, card in enumerate(result.uno_penalty_cards):
+        for offset, card in enumerate(penalty_cards):
             if player_id == 0:
                 self.hidden_hand_card_ids.add(id(card))
             stagger = float((offset - 0.5) * 14)
@@ -1326,6 +1519,9 @@ class PlayingScreen(BaseScreen):
         card.target_rotation = target_rotation
         card.current_scale = 1.0
         card.target_scale = 1.0
+        duration = 0.24 if kind == "play" else 0.32
+        if kind == "draw" and owner_id != 0:
+            duration = 0.28
         self.active_cards.append(
             ActiveCard(
                 card=card,
@@ -1338,6 +1534,7 @@ class PlayingScreen(BaseScreen):
                 current_scale=1.0,
                 target_scale=1.0,
                 reveal_hand_card=reveal_hand_card,
+                duration=duration,
             )
         )
 
@@ -1358,6 +1555,8 @@ class PlayingScreen(BaseScreen):
                 active_card.card.current_scale = active_card.target_scale
                 if active_card.kind == "play":
                     self.display_top_card = active_card.card
+                    if active_card.card.kind == ACTION_WILD_DRAW_FOUR:
+                        self._trigger_screen_shake()
                 if active_card.reveal_hand_card:
                     self.hidden_hand_card_ids.discard(id(active_card.card))
                 continue
@@ -1371,12 +1570,28 @@ class PlayingScreen(BaseScreen):
 
     def _draw_active_cards(self, screen: pygame.Surface) -> None:
         for active_card in self.active_cards:
-            if active_card.kind == "draw" and active_card.owner_id != 0:
+            card_center = (int(active_card.current_pos[0]), int(active_card.current_pos[1]))
+            shadow = pygame.Surface((66, 20), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 95), shadow.get_rect())
+            shadow_rect = shadow.get_rect(center=(card_center[0], card_center[1] + 10))
+            screen.blit(shadow, shadow_rect)
+
+            if active_card.kind == "draw" and active_card.owner_id == 0:
+                showing_front = active_card.progress >= 0.5
+                base_surface = (
+                    self.atlas.get_card_surface(active_card.card, 88, 130)
+                    if showing_front
+                    else self.atlas.get_back_surface(88, 130)
+                )
+                flip_x = max(0.08, abs(0.5 - active_card.progress) * 2.0)
+                flip_width = max(8, int(88 * flip_x))
+                card_img = pygame.transform.smoothscale(base_surface, (flip_width, 130))
+            elif active_card.kind == "draw" and active_card.owner_id != 0:
                 card_img = self.atlas.get_back_surface(88, 130)
             else:
                 card_img = self.atlas.get_card_surface(active_card.card, 88, 130)
             card_img = transform_card_surface(card_img, active_card.current_rotation, active_card.current_scale)
-            rect = card_img.get_rect(center=(int(active_card.current_pos[0]), int(active_card.current_pos[1])))
+            rect = card_img.get_rect(center=card_center)
             screen.blit(card_img, rect)
 
     def _draw_hand_transfer_cards(self, screen: pygame.Surface) -> None:
@@ -1384,6 +1599,12 @@ class PlayingScreen(BaseScreen):
             return
 
         for active_card in self.hand_transfer_animation.cards:
+            shadow = pygame.Surface((66, 20), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 90), shadow.get_rect())
+            shadow_rect = shadow.get_rect(
+                center=(int(active_card.current_pos[0]), int(active_card.current_pos[1] + 10))
+            )
+            screen.blit(shadow, shadow_rect)
             card_img = self.atlas.get_back_surface(88, 130)
             card_img = transform_card_surface(card_img, active_card.current_rotation, active_card.current_scale)
             rect = card_img.get_rect(center=(int(active_card.current_pos[0]), int(active_card.current_pos[1])))
@@ -1410,12 +1631,18 @@ class PlayingScreen(BaseScreen):
                 hovered=(i == self.hovered_index),
             )
             card.target_pos = (float(target_rect.x), float(target_rect.y))
+            target_rotation = get_player_hand_rotation(i, len(hand))
+            if i == self.hovered_index:
+                target_rotation *= 0.78
+            card.target_rotation = target_rotation
 
             if not self._hand_layout_initialized:
                 card.current_pos = card.target_pos
+                card.current_rotation = target_rotation
             else:
                 factor = smooth_factor(dt, speed)
                 card.current_pos = lerp_point(card.current_pos, card.target_pos, factor)
+                card.current_rotation = lerp(card.current_rotation, card.target_rotation, smooth_factor(dt, speed * 0.75))
 
             if i == self.hovered_index:
                 card.target_scale = 1.04

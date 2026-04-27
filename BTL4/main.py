@@ -1,7 +1,6 @@
-from pathlib import Path
-
 import pygame
 
+from scripts.assets import asset_path
 from scripts.screens import AudioSettings, TitleScreen
 from scripts.sprites import CardSpriteAtlas
 
@@ -11,19 +10,28 @@ MIN_SCREEN_SIZE = (1100, 720)
 
 def main() -> None:
     pygame.init()
-    pygame.mixer.init()
+    try:
+        pygame.mixer.init()
+        mixer_ready = True
+    except pygame.error:
+        mixer_ready = False
     pygame.display.set_caption("UNO tay`")
     screen = pygame.display.set_mode(DEFAULT_SCREEN_SIZE, pygame.RESIZABLE)
     clock = pygame.time.Clock()
 
-    # Asset loading
-    atlas = CardSpriteAtlas(
-        Path("assets") / "sprites" / "PC _ Computer - UNO - Cards - Cards (Classic).png"
-    )
+    atlas_path = asset_path("sprites", "PC _ Computer - UNO - Cards - Cards (Classic).png")
+    atlas = CardSpriteAtlas(atlas_path)
     audio_settings = AudioSettings()
-    bgm_path = Path("assets") / "bgm" / "domixi tay bac.mp3"
-    pygame.mixer.music.load(str(bgm_path))
-    pygame.mixer.music.set_volume(audio_settings.music_mix())
+    bgm_loaded = False
+    if mixer_ready:
+        bgm_path = asset_path("bgm", "domixi tay bac.mp3")
+        if bgm_path.exists():
+            try:
+                pygame.mixer.music.load(str(bgm_path))
+                pygame.mixer.music.set_volume(audio_settings.music_mix())
+                bgm_loaded = True
+            except pygame.error:
+                bgm_loaded = False
 
     current_screen = TitleScreen(atlas, audio_settings)
     bgm_playing = False
@@ -31,9 +39,10 @@ def main() -> None:
     running = True
     while running:
         now = pygame.time.get_ticks()
-        pygame.mixer.music.set_volume(audio_settings.music_mix())
+        if bgm_loaded:
+            pygame.mixer.music.set_volume(audio_settings.music_mix())
 
-        if current_screen.wants_bgm:
+        if bgm_loaded and current_screen.wants_bgm:
             if not bgm_playing:
                 pygame.mixer.music.play(-1)
                 bgm_playing = True

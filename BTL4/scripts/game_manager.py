@@ -38,6 +38,9 @@ class ActionResult:
     message: str
     played_card: Optional[Card] = None
     drew_card: Optional[Card] = None
+    uno_call_player: Optional[int] = None
+    uno_caught_player: Optional[int] = None
+    uno_penalty_cards: List[Card] = field(default_factory=list)
 
 
 @dataclass
@@ -171,7 +174,10 @@ class UnoGameManager:
 
         legal = []
         hand = self.player_hands[player_id]
+        has_single_card = len(hand) == 1
         for i, card in enumerate(hand):
+            if has_single_card and self._is_forbidden_last_card(card):
+                continue
             if self.is_legal_play(card):
                 legal.append(i)
         return legal
