@@ -38,6 +38,19 @@ class ActionResult:
     message: str
     played_card: Optional[Card] = None
     drew_card: Optional[Card] = None
+
+
+@dataclass
+class GameSettings:
+    """Configuration for a UNO game."""
+    num_players: int = 4
+    initial_cards: int = 7
+    rule_0_enabled: bool = True
+    rule_7_enabled: bool = True
+    rule_8_enabled: bool = True
+    rule_8_reaction_timer_ms: int = 3000
+    two_player_reverse_behavior: str = "reverse"  # "skip" or "reverse"
+    extension_packs: List[str] = field(default_factory=list)
     uno_call_player: Optional[int] = None
     uno_caught_player: Optional[int] = None
     uno_penalty_cards: List[Card] = field(default_factory=list)
@@ -46,18 +59,20 @@ class ActionResult:
 class UnoGameManager:
     """Host-authoritative game state manager decoupled from input and rendering."""
 
-    REACTION_WINDOW_MS = 3000
+    def __init__(self, settings: Optional[GameSettings] = None, seed: Optional[int] = None):
+        if settings is None:
+            settings = GameSettings()
 
-    def __init__(self, num_players: int, seed: Optional[int] = None):
-        if not 2 <= num_players <= 4:
+        if not 2 <= settings.num_players <= 4:
             raise ValueError("UNO supports 2 to 4 players in this module.")
 
+        self.settings = settings
         self.rng = random.Random(seed)
-        self.num_players = num_players
+        self.num_players = settings.num_players
 
         self.draw_pile: List[Card] = []
         self.discard_pile: List[Card] = []
-        self.player_hands: List[List[Card]] = [[] for _ in range(num_players)]
+        self.player_hands: List[List[Card]] = [[] for _ in range(self.num_players)]
 
         self.current_player = 0
         self.turn_direction = 1
@@ -94,7 +109,7 @@ class UnoGameManager:
         for hand in self.player_hands:
             hand.clear()
 
-        for _ in range(7):
+        for _ in range(self.settings.initial_cards):
             for player in range(self.num_players):
                 self.player_hands[player].append(self.draw_from_pile())
 
@@ -276,7 +291,7 @@ class UnoGameManager:
             self.pending_effect_player = player_id
             started_at = timestamp_ms or 0
             self.pending_reaction_started_at_ms = started_at
-            self.pending_reaction_due_ms = started_at + self.REACTION_WINDOW_MS
+            self.pending_reaction_due_ms = started_at + self.settings.rule_8_reaction_timer_ms
             self.pending_reaction_players = set()
             self.pending_reaction_times = []
             return self._apply_uno_check(

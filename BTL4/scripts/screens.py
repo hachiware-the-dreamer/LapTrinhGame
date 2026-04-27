@@ -9,6 +9,7 @@ from scripts.animation import ActiveCard, lerp, lerp_point, smooth_factor, trans
 from scripts.ai import AITurnOutcome, perform_simple_ai_turn
 from scripts.cards import Card
 from scripts.game_manager import (
+    GameSettings,
     PlayerAction,
     PASS_CLOCKWISE,
     PASS_COUNTER_CLOCKWISE,
@@ -38,6 +39,15 @@ from scripts.ui import (
     render_end_screen,
     render_title_screen,
     render_ui,
+)
+from scripts.game_settings_ui import (
+    get_settings_screen_button_rects,
+    get_player_count_rects,
+    get_initial_cards_slider_rect,
+    get_rule_toggle_rects,
+    get_rule_8_timer_slider_rect,
+    get_two_player_behavior_rects,
+    render_settings_screen,
 )
 
 STATE_TITLE = "title"
@@ -103,14 +113,8 @@ class TitleScreen(BaseScreen):
                 for button_name, rect in get_title_screen_button_rects(screen.get_rect()).items():
                     if rect.collidepoint(mouse_pos):
                         if button_name == "start_local":
-                            game = UnoGameManager(num_players=4)
                             return ScreenResult(
-                                next_screen=PlayingScreen(
-                                    atlas=self.atlas,
-                                    game=game,
-                                    last_message="Player 1 starts.",
-                                    next_ai_time=now_ms + PlayingScreen.AI_TURN_DELAY_MS,
-                                )
+                                next_screen=SettingsScreen(self.atlas)
                             )
                         break
 
@@ -149,6 +153,122 @@ class EndScreen(BaseScreen):
 
     def draw(self, screen: pygame.Surface, now_ms: int) -> None:
         render_end_screen(screen, self.game)
+
+
+class SettingsScreen(BaseScreen):
+    """Screen for configuring game settings before starting."""
+    state_name = "settings"
+
+    def __init__(self, atlas: CardSpriteAtlas) -> None:
+        self.atlas = atlas
+        self.settings = GameSettings()
+        self.dragging_initial_cards = False
+        self.dragging_rule_8_timer = False
+
+    def handle_events(
+        self,
+        events: list[pygame.event.Event],
+        screen: pygame.Surface,
+        now_ms: int,
+    ) -> ScreenResult:
+        for event in events:
+            if event.type == pygame.QUIT:
+                return ScreenResult(running=False)
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = event.pos
+                
+                # Player count buttons
+                for count, rect in get_player_count_rects(screen.get_rect()).items():
+                    if rect.collidepoint(mouse_pos):
+                        self.settings.num_players = count
+                        break
+                
+                # Initial cards slider
+                slider_rect = get_initial_cards_slider_rect(screen.get_rect())
+                if slider_rect.collidepoint(mouse_pos):
+                    self.dragging_initial_cards = True
+                
+                # Rule toggles
+                for rule, rect in get_rule_toggle_rects(screen.get_rect()).items():
+                    if rect.collidepoint(mouse_pos):
+                        if rule == "rule_0":
+                            self.settings.rule_0_enabled = not self.settings.rule_0_enabled
+                        elif rule == "rule_7":
+                            self.settings.rule_7_enabled = not self.settings.rule_7_enabled
+                        elif rule == "rule_8":
+                            self.settings.rule_8_enabled = not self.settings.rule_8_enabled
+                        break
+                
+                # Rule 8 timer slider
+                timer_rect = get_rule_8_timer_slider_rect(
+                    screen.get_rect(),
+                    show_two_player_behavior=(self.settings.num_players == 2),
+                )
+                if timer_rect.collidepoint(mouse_pos) and self.settings.rule_8_enabled:
+                    self.dragging_rule_8_timer = True
+                
+                # 2-player behavior buttons
+                if self.settings.num_players == 2:
+                    for behavior, rect in get_two_player_behavior_rects(
+                        screen.get_rect(),
+                        show_rule_8_timer=self.settings.rule_8_enabled,
+                    ).items():
+                        if rect.collidepoint(mouse_pos):
+                            self.settings.two_player_reverse_behavior = behavior
+                            break
+                
+                # Back button
+                back_rect = get_settings_screen_button_rects(screen.get_rect())["back"]
+                if back_rect.collidepoint(mouse_pos):
+                    return ScreenResult(next_screen=TitleScreen(self.atlas))
+                
+                # Start game button
+                start_rect = get_settings_screen_button_rects(screen.get_rect())["start_game"]
+                if start_rect.collidepoint(mouse_pos):
+                    game = UnoGameManager(settings=self.settings)
+                    return ScreenResult(
+                        next_screen=PlayingScreen(
+                            atlas=self.atlas,
+                            game=game,
+                            last_message="Player 1 starts.",
+                            next_ai_time=now_ms + PlayingScreen.AI_TURN_DELAY_MS,
+                        )
+                    )
+
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                self.dragging_initial_cards = False
+                self.dragging_rule_8_timer = False
+
+            elif event.type == pygame.MOUSEMOTION:
+                if self.dragging_initial_cards:
+                    slider_rect = get_initial_cards_slider_rect(screen.get_rect())
+                    relative_x = max(0, min(1.0, (event.pos[0] - slider_rect.x) / slider_rect.width))
+                    self.settings.initial_cards = int(2 + relative_x * 13)
+                
+                if self.dragging_rule_8_timer and self.settings.rule_8_enabled:
+                    timer_rect = get_rule_8_timer_slider_rect(
+                        screen.get_rect(),
+                        show_two_player_behavior=(self.settings.num_players == 2),
+                    )
+                    relative_x = max(0, min(1.0, (event.pos[0] - timer_rect.x) / timer_rect.width))
+                    raw_timer_ms = 1000 + relative_x * 4000
+                    snapped_timer_ms = round((raw_timer_ms - 1000) / 250) * 250 + 1000
+                    self.settings.rule_8_reaction_timer_ms = max(1000, min(5000, int(snapped_timer_ms)))
+
+        return ScreenResult()
+
+    def draw(self, screen: pygame.Surface, now_ms: int) -> None:
+        render_settings_screen(
+            screen,
+            self.settings.num_players,
+            self.settings.initial_cards,
+            self.settings.rule_0_enabled,
+            self.settings.rule_7_enabled,
+            self.settings.rule_8_enabled,
+            self.settings.rule_8_reaction_timer_ms,
+            self.settings.two_player_reverse_behavior,
+        )
 
 
 class PlayingScreen(BaseScreen):
