@@ -950,7 +950,10 @@ class PlayingScreen(BaseScreen):
 
     def _draw_active_cards(self, screen: pygame.Surface) -> None:
         for active_card in self.active_cards:
-            card_img = self.atlas.get_card_surface(active_card.card, 88, 130)
+            if active_card.kind == "draw" and active_card.owner_id != 0:
+                card_img = self.atlas.get_back_surface(88, 130)
+            else:
+                card_img = self.atlas.get_card_surface(active_card.card, 88, 130)
             card_img = transform_card_surface(card_img, active_card.current_rotation, active_card.current_scale)
             rect = card_img.get_rect(center=(int(active_card.current_pos[0]), int(active_card.current_pos[1])))
             screen.blit(card_img, rect)
@@ -960,7 +963,7 @@ class PlayingScreen(BaseScreen):
             return
 
         for active_card in self.hand_transfer_animation.cards:
-            card_img = self.atlas.get_card_surface(active_card.card, 88, 130)
+            card_img = self.atlas.get_back_surface(88, 130)
             card_img = transform_card_surface(card_img, active_card.current_rotation, active_card.current_scale)
             rect = card_img.get_rect(center=(int(active_card.current_pos[0]), int(active_card.current_pos[1])))
             screen.blit(card_img, rect)

@@ -22,7 +22,7 @@ def main() -> None:
     )
     bgm_path = Path("assets") / "bgm" / "domixi tay bac.mp3"
     pygame.mixer.music.load(str(bgm_path))
-    pygame.mixer.music.set_volume(0.3)
+    pygame.mixer.music.set_volume(0.18)
 
     current_screen = TitleScreen(atlas)
     bgm_playing = False
