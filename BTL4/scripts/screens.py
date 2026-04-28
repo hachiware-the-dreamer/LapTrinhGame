@@ -1,6 +1,7 @@
 import random
+import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 
 import pygame
 
@@ -9,6 +10,7 @@ from scripts.assets import asset_path
 from scripts.ai import AITurnOutcome, perform_simple_ai_turn
 from scripts.cards import ACTION_WILD_DRAW_FOUR, Card
 from scripts.game_manager import (
+    ActionResult,
     GameSettings,
     PlayerAction,
     PASS_CLOCKWISE,
@@ -17,6 +19,13 @@ from scripts.game_manager import (
     RULE_SEVEN_TARGET,
     RULE_ZERO_DIRECTION,
     UnoGameManager,
+)
+from scripts.multiplayer import (
+    LobbyBrowser,
+    LobbyRoomInfo,
+    MultiplayerClient,
+    MultiplayerHost,
+    deserialize_game_state,
 )
 from scripts.sprites import CardSpriteAtlas
 from scripts.ui import (
@@ -37,12 +46,10 @@ from scripts.ui import (
     get_reaction_button_rect,
     get_rule_seven_target_rects,
     get_rule_zero_choice_rects,
-    get_multiplayer_screen_button_rects,
     get_title_screen_button_rects,
     get_uno_button_rect,
     get_wild_color_at_pos,
     render_end_screen,
-    render_multiplayer_screen,
     render_title_screen,
     render_ui,
     theme_font,
@@ -61,6 +68,64 @@ SETTINGS_DANGER_FILL = (225, 55, 55)
 SETTINGS_DANGER_BORDER = (246, 166, 166)
 SETTINGS_LABEL_X_OFFSET = 430
 SETTINGS_SLIDER_WIDTH = 400
+
+
+def _canonical_to_view_player(canonical_id: int, local_canonical_id: int, num_players: int) -> int:
+    if num_players <= 0:
+        return canonical_id
+    return (canonical_id - local_canonical_id) % num_players
+
+
+def _view_to_canonical_player(view_id: int, local_canonical_id: int, num_players: int) -> int:
+    if num_players <= 0:
+        return view_id
+    return (view_id + local_canonical_id) % num_players
+
+
+def _remap_game_payload_to_local_view(
+    game_payload: dict[str, Any],
+    local_canonical_player_id: int,
+) -> dict[str, Any]:
+    remapped = dict(game_payload)
+    hands = game_payload.get("player_hands", [])
+    num_players = len(hands) if isinstance(hands, list) else int(game_payload.get("settings", {}).get("num_players", 4))
+    if num_players <= 0:
+        return remapped
+
+    remapped_hands: list[list[dict[str, Any]]] = [[] for _ in range(num_players)]
+    if isinstance(hands, list):
+        for canonical_id, hand_payload in enumerate(hands):
+            view_id = _canonical_to_view_player(canonical_id, local_canonical_player_id, num_players)
+            remapped_hands[view_id] = hand_payload if isinstance(hand_payload, list) else []
+    remapped["player_hands"] = remapped_hands
+
+    def remap_player_value(value: Any) -> Any:
+        if value is None:
+            return None
+        return _canonical_to_view_player(int(value), local_canonical_player_id, num_players)
+
+    remapped["current_player"] = remap_player_value(game_payload.get("current_player"))
+    remapped["winner"] = remap_player_value(game_payload.get("winner"))
+    remapped["pending_effect_player"] = remap_player_value(game_payload.get("pending_effect_player"))
+    remapped["pending_draw_decision_player"] = remap_player_value(game_payload.get("pending_draw_decision_player"))
+    remapped["pending_reaction_players"] = [
+        _canonical_to_view_player(int(pid), local_canonical_player_id, num_players)
+        for pid in game_payload.get("pending_reaction_players", [])
+    ]
+    remapped["pending_reaction_times"] = [
+        [_canonical_to_view_player(int(item[0]), local_canonical_player_id, num_players), int(item[1])]
+        for item in game_payload.get("pending_reaction_times", [])
+        if isinstance(item, list) and len(item) == 2
+    ]
+    remapped["uno_called_players"] = [
+        _canonical_to_view_player(int(pid), local_canonical_player_id, num_players)
+        for pid in game_payload.get("uno_called_players", [])
+    ]
+    return remapped
+
+
+def _card_signature(card: Card) -> tuple[Optional[str], str, Optional[int], Optional[str]]:
+    return (card.color, card.kind, card.number, card.chosen_color)
 
 
 @dataclass
@@ -157,10 +222,29 @@ class TitleScreen(BaseScreen):
 
 class MultiplayerScreen(BaseScreen):
     state_name = "multiplayer"
+    MODE_LOBBY = "lobby"
+    MODE_CREATE = "create"
+    MODE_ROOM = "room"
 
     def __init__(self, atlas: CardSpriteAtlas, audio_settings: AudioSettings) -> None:
         self.atlas = atlas
         self.audio_settings = audio_settings
+        self.mode = self.MODE_LOBBY
+        default_name = (os.getenv("USERNAME") or os.getenv("USER") or "Player").strip()
+        self.player_name = default_name[:20] or "Player"
+        self.join_password = ""
+        self.create_room_name = "UNO Room"
+        self.create_password = ""
+        self.create_capacity = 4
+        self.focus_field = "player_name"
+        self.selected_room_id: Optional[str] = None
+        self.lobby_rooms: list[LobbyRoomInfo] = []
+        self.room_state: Optional[dict[str, Any]] = None
+        self.host: Optional[MultiplayerHost] = None
+        self.client: Optional[MultiplayerClient] = None
+        self.is_host = False
+        self.message = "Create a room or join one from the lobby."
+        self._pending_next_screen: Optional[BaseScreen] = None
 
     def handle_events(
         self,
@@ -168,22 +252,624 @@ class MultiplayerScreen(BaseScreen):
         screen: pygame.Surface,
         now_ms: int,
     ) -> ScreenResult:
+        self._refresh_lobby_cache()
         for event in events:
             if event.type == pygame.QUIT:
+                self._close_network()
                 return ScreenResult(running=False)
 
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    if self.mode == self.MODE_CREATE:
+                        self.mode = self.MODE_LOBBY
+                        self.focus_field = "player_name"
+                    elif self.mode == self.MODE_ROOM:
+                        self._leave_room()
+                    else:
+                        self._close_network()
+                        return ScreenResult(next_screen=TitleScreen(self.atlas, self.audio_settings))
+                    continue
+                self._handle_text_input(event)
+                continue
+
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_pos = event.pos
-                for button_name, rect in get_multiplayer_screen_button_rects(screen.get_rect()).items():
-                    if rect.collidepoint(mouse_pos):
-                        if button_name == "back":
-                            return ScreenResult(next_screen=TitleScreen(self.atlas, self.audio_settings))
-                        break
+                if self.mode == self.MODE_LOBBY:
+                    outcome = self._handle_lobby_click(event.pos, screen.get_rect())
+                elif self.mode == self.MODE_CREATE:
+                    outcome = self._handle_create_click(event.pos, screen.get_rect())
+                else:
+                    outcome = self._handle_room_click(event.pos, screen.get_rect(), now_ms)
+                if outcome is not None:
+                    return outcome
+
+        if self._pending_next_screen is not None:
+            target = self._pending_next_screen
+            self._pending_next_screen = None
+            return ScreenResult(next_screen=target)
 
         return ScreenResult()
 
+    def update(self, screen: pygame.Surface, now_ms: int) -> Optional["BaseScreen"]:
+        if self.host is not None:
+            self.room_state = self.host.room_state
+        if self.client is not None:
+            for packet in self.client.poll_messages():
+                packet_type = packet.get("type")
+                if packet_type == "room_state":
+                    self.room_state = packet.get("room")
+                elif packet_type == "match_started":
+                    summary = packet.get("summary") or {}
+                    ai_added = int(summary.get("ai_added", 0))
+                    self.message = f"Host started match. AI backfill: {ai_added}."
+                elif packet_type == "match_sync":
+                    self._maybe_enter_network_match(now_ms, packet)
+                elif packet_type == "disconnected":
+                    self.message = str(packet.get("message", "Disconnected from host."))
+                    self._leave_room(keep_message=True)
+        self._refresh_lobby_cache()
+        return None
+
     def draw(self, screen: pygame.Surface, now_ms: int) -> None:
-        render_multiplayer_screen(screen)
+        draw_theme_background(screen)
+        screen_rect = screen.get_rect()
+        title_font = theme_font(screen_rect.width, screen_rect.height, 72, bold=True)
+        section_font = theme_font(screen_rect.width, screen_rect.height, 32, bold=True)
+        body_font = theme_font(screen_rect.width, screen_rect.height, 24)
+        small_font = theme_font(screen_rect.width, screen_rect.height, 20)
+
+        title = title_font.render("MULTIPLAYER", True, (245, 245, 245))
+        screen.blit(title, title.get_rect(midtop=(screen_rect.centerx, 24)))
+
+        panel = pygame.Rect(0, 0, min(1180, screen_rect.width - 96), screen_rect.height - 170)
+        panel.center = (screen_rect.centerx, screen_rect.centery + 38)
+        draw_theme_panel(screen, panel, alpha=146)
+
+        if self.mode == self.MODE_LOBBY:
+            self._draw_lobby(screen, panel, section_font, body_font, small_font)
+        elif self.mode == self.MODE_CREATE:
+            self._draw_create_form(screen, panel, section_font, body_font, small_font)
+        else:
+            self._draw_room_view(screen, panel, section_font, body_font, small_font)
+
+    def _draw_lobby(
+        self,
+        screen: pygame.Surface,
+        panel: pygame.Rect,
+        section_font: pygame.font.Font,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        screen_rect = screen.get_rect()
+        label = section_font.render("Active Rooms", True, (238, 242, 246))
+        screen.blit(label, (panel.x + 28, panel.y + 18))
+
+        name_rect = self._player_name_input_rect(panel)
+        pwd_rect = self._join_password_input_rect(panel)
+        self._draw_input_box(screen, name_rect, f"Name: {self.player_name}", self.focus_field == "player_name")
+        join_password_text = "*" * len(self.join_password) if self.join_password else "(none)"
+        self._draw_input_box(
+            screen,
+            pwd_rect,
+            f"Join Password: {join_password_text}",
+            self.focus_field == "join_password",
+        )
+
+        rows = self._room_row_rects(panel, len(self.lobby_rooms))
+        if not rows:
+            empty = body_font.render("No joinable rooms found on LAN.", True, (188, 200, 212))
+            screen.blit(empty, (panel.x + 36, panel.y + 170))
+        else:
+            for idx, room in enumerate(self.lobby_rooms):
+                row_rect = rows[idx]
+                selected = room.room_id == self.selected_room_id
+                fill = SETTINGS_ACTIVE_FILL if selected else SETTINGS_IDLE_FILL
+                border = SETTINGS_ACTIVE_BORDER if selected else SETTINGS_IDLE_BORDER
+                pygame.draw.rect(screen, fill, row_rect, border_radius=10)
+                pygame.draw.rect(screen, border, row_rect, width=2, border_radius=10)
+
+                pwd_mark = " (Locked)" if room.has_password else ""
+                details = (
+                    f"{room.room_name}{pwd_mark}  |  Host: {room.host_name}  |  "
+                    f"Players: {room.human_count}/{room.capacity}"
+                )
+                text = small_font.render(details, True, (244, 246, 248))
+                screen.blit(text, text.get_rect(midleft=(row_rect.x + 14, row_rect.centery)))
+
+        buttons = self._lobby_button_rects(panel)
+        draw_theme_button(
+            screen,
+            buttons["create"],
+            "Create Room",
+            SETTINGS_ACTIVE_FILL,
+            SETTINGS_ACTIVE_BORDER,
+        )
+        draw_theme_button(
+            screen,
+            buttons["join"],
+            "Join Selected",
+            (70, 130, 225),
+            (158, 194, 246),
+        )
+        draw_theme_button(
+            screen,
+            buttons["back"],
+            "Back",
+            SETTINGS_DANGER_FILL,
+            SETTINGS_DANGER_BORDER,
+        )
+
+        footer = small_font.render(self.message, True, (234, 213, 145))
+        screen.blit(footer, footer.get_rect(midbottom=(screen_rect.centerx, screen_rect.bottom - 16)))
+
+    def _draw_create_form(
+        self,
+        screen: pygame.Surface,
+        panel: pygame.Rect,
+        section_font: pygame.font.Font,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        header = section_font.render("Create Room", True, (238, 242, 246))
+        screen.blit(header, header.get_rect(midtop=(panel.centerx, panel.y + 26)))
+
+        room_name_rect = pygame.Rect(panel.centerx - 290, panel.y + 130, 580, 58)
+        room_pwd_rect = pygame.Rect(panel.centerx - 290, panel.y + 214, 580, 58)
+        self._draw_input_box(
+            screen,
+            room_name_rect,
+            f"Room Name: {self.create_room_name}",
+            self.focus_field == "create_room_name",
+        )
+        create_pwd_text = "*" * len(self.create_password) if self.create_password else "(none)"
+        self._draw_input_box(
+            screen,
+            room_pwd_rect,
+            f"Password: {create_pwd_text}",
+            self.focus_field == "create_password",
+        )
+
+        cap_label = body_font.render("Capacity:", True, (233, 239, 244))
+        screen.blit(cap_label, cap_label.get_rect(midleft=(panel.centerx - 288, panel.y + 325)))
+        cap_rects = self._capacity_button_rects(panel)
+        for value, rect in cap_rects.items():
+            selected = value == self.create_capacity
+            fill = SETTINGS_ACTIVE_FILL if selected else SETTINGS_IDLE_FILL
+            border = SETTINGS_ACTIVE_BORDER if selected else SETTINGS_IDLE_BORDER
+            draw_theme_button(screen, rect, str(value), fill, border, selected=selected)
+
+        buttons = self._create_button_rects(panel)
+        draw_theme_button(
+            screen,
+            buttons["confirm"],
+            "Host Room",
+            SETTINGS_ACTIVE_FILL,
+            SETTINGS_ACTIVE_BORDER,
+        )
+        draw_theme_button(
+            screen,
+            buttons["cancel"],
+            "Cancel",
+            SETTINGS_DANGER_FILL,
+            SETTINGS_DANGER_BORDER,
+        )
+        help_text = small_font.render("Capacity must be 2 or 4 players.", True, (188, 200, 212))
+        screen.blit(help_text, help_text.get_rect(midtop=(panel.centerx, panel.y + 406)))
+        msg = small_font.render(self.message, True, (234, 213, 145))
+        screen.blit(msg, msg.get_rect(midbottom=(panel.centerx, panel.bottom - 16)))
+
+    def _draw_room_view(
+        self,
+        screen: pygame.Surface,
+        panel: pygame.Rect,
+        section_font: pygame.font.Font,
+        body_font: pygame.font.Font,
+        small_font: pygame.font.Font,
+    ) -> None:
+        room = self.room_state or {}
+        room_name = str(room.get("room_name", "Room"))
+        room_id = str(room.get("room_id", "------"))
+        capacity = int(room.get("capacity", 0) or 0)
+        human_count = int(room.get("human_count", 0) or 0)
+        ai_count = int(room.get("ai_count", 0) or 0)
+        started = bool(room.get("started", False))
+
+        title = section_font.render(f"{room_name} [{room_id}]", True, (238, 242, 246))
+        screen.blit(title, title.get_rect(midtop=(panel.centerx, panel.y + 22)))
+
+        detail = body_font.render(
+            f"Humans: {human_count}/{capacity}  |  Open Slots: {max(0, capacity - human_count)}  |  AI Added: {ai_count}",
+            True,
+            (222, 230, 238),
+        )
+        screen.blit(detail, detail.get_rect(midtop=(panel.centerx, panel.y + 76)))
+
+        player_panel = pygame.Rect(panel.x + 36, panel.y + 130, panel.width - 72, panel.height - 280)
+        draw_theme_panel(screen, player_panel, alpha=120)
+        player_title = body_font.render("Players in Room", True, (242, 246, 250))
+        screen.blit(player_title, player_title.get_rect(midtop=(player_panel.centerx, player_panel.y + 16)))
+
+        players = room.get("players", []) if isinstance(room.get("players"), list) else []
+        for idx, player in enumerate(players):
+            name = str(player.get("display_name", f"Player {idx + 1}"))
+            mark = " (Host)" if player.get("is_host") else ""
+            line = small_font.render(f"{idx + 1}. {name}{mark}", True, (232, 236, 242))
+            screen.blit(line, line.get_rect(midleft=(player_panel.x + 28, player_panel.y + 58 + idx * 34)))
+
+        if started:
+            start_note = small_font.render(
+                "Match started. Opening synchronized gameplay...",
+                True,
+                (245, 213, 150),
+            )
+            screen.blit(start_note, start_note.get_rect(midtop=(panel.centerx, player_panel.bottom + 18)))
+
+        buttons = self._room_button_rects(panel, started=started)
+        if self.is_host and not started:
+            draw_theme_button(
+                screen,
+                buttons["start"],
+                "Start Match",
+                SETTINGS_ACTIVE_FILL,
+                SETTINGS_ACTIVE_BORDER,
+            )
+        draw_theme_button(
+            screen,
+            buttons["leave"],
+            "Leave Room",
+            SETTINGS_DANGER_FILL,
+            SETTINGS_DANGER_BORDER,
+        )
+        status = small_font.render(self.message, True, (234, 213, 145))
+        screen.blit(status, status.get_rect(midbottom=(panel.centerx, panel.bottom - 16)))
+
+    def _refresh_lobby_cache(self) -> None:
+        browser = getattr(self, "_browser", None)
+        if browser is None:
+            browser = LobbyBrowser()
+            self._browser = browser
+        self.lobby_rooms = browser.list_rooms()
+        if self.selected_room_id and all(room.room_id != self.selected_room_id for room in self.lobby_rooms):
+            self.selected_room_id = None
+
+    def _close_network(self) -> None:
+        if self.client is not None:
+            self.client.close()
+            self.client = None
+        if self.host is not None:
+            self.host.close()
+            self.host = None
+        browser = getattr(self, "_browser", None)
+        if browser is not None:
+            browser.close()
+            self._browser = None
+        self.room_state = None
+        self.is_host = False
+
+    def _leave_room(self, keep_message: bool = False) -> None:
+        if self.client is not None:
+            self.client.send({"type": "leave"})
+            self.client.close()
+            self.client = None
+        if self.host is not None:
+            self.host.leave_host()
+            self.host = None
+        self.room_state = None
+        self.is_host = False
+        self.mode = self.MODE_LOBBY
+        self.focus_field = "player_name"
+        if not keep_message:
+            self.message = "Returned to lobby."
+
+    def _handle_text_input(self, event: pygame.event.Event) -> None:
+        if event.key == pygame.K_TAB:
+            if self.mode == self.MODE_LOBBY:
+                self.focus_field = "join_password" if self.focus_field == "player_name" else "player_name"
+            elif self.mode == self.MODE_CREATE:
+                self.focus_field = "create_password" if self.focus_field == "create_room_name" else "create_room_name"
+            return
+
+        if event.key == pygame.K_BACKSPACE:
+            self._delete_last_char()
+            return
+
+        char = event.unicode
+        if not char or char == "\r":
+            return
+        if ord(char) < 32 or ord(char) > 126:
+            return
+        self._append_char(char)
+
+    def _append_char(self, char: str) -> None:
+        if self.focus_field == "player_name":
+            self.player_name = (self.player_name + char)[:20]
+        elif self.focus_field == "join_password":
+            self.join_password = (self.join_password + char)[:24]
+        elif self.focus_field == "create_room_name":
+            self.create_room_name = (self.create_room_name + char)[:28]
+        elif self.focus_field == "create_password":
+            self.create_password = (self.create_password + char)[:24]
+
+    def _delete_last_char(self) -> None:
+        if self.focus_field == "player_name":
+            self.player_name = self.player_name[:-1]
+        elif self.focus_field == "join_password":
+            self.join_password = self.join_password[:-1]
+        elif self.focus_field == "create_room_name":
+            self.create_room_name = self.create_room_name[:-1]
+        elif self.focus_field == "create_password":
+            self.create_password = self.create_password[:-1]
+
+    def _handle_lobby_click(self, mouse_pos: tuple[int, int], screen_rect: pygame.Rect) -> Optional[ScreenResult]:
+        panel = self._main_panel_rect(screen_rect)
+        name_rect = self._player_name_input_rect(panel)
+        pwd_rect = self._join_password_input_rect(panel)
+        if name_rect.collidepoint(mouse_pos):
+            self.focus_field = "player_name"
+            return None
+        if pwd_rect.collidepoint(mouse_pos):
+            self.focus_field = "join_password"
+            return None
+
+        rows = self._room_row_rects(panel, len(self.lobby_rooms))
+        for idx, rect in enumerate(rows):
+            if rect.collidepoint(mouse_pos):
+                self.selected_room_id = self.lobby_rooms[idx].room_id
+                room = self.lobby_rooms[idx]
+                self.message = f"Selected room {room.room_name} ({room.human_count}/{room.capacity})."
+                return None
+
+        buttons = self._lobby_button_rects(panel)
+        if buttons["back"].collidepoint(mouse_pos):
+            self._close_network()
+            return ScreenResult(next_screen=TitleScreen(self.atlas, self.audio_settings))
+        if buttons["create"].collidepoint(mouse_pos):
+            self.mode = self.MODE_CREATE
+            self.focus_field = "create_room_name"
+            self.message = "Choose room parameters and host."
+            return None
+        if buttons["join"].collidepoint(mouse_pos):
+            self._join_selected_room()
+            return None
+        return None
+
+    def _join_selected_room(self) -> None:
+        selected = next((room for room in self.lobby_rooms if room.room_id == self.selected_room_id), None)
+        if selected is None:
+            self.message = "Select a room first."
+            return
+
+        if self.host is not None:
+            self.host.close()
+            self.host = None
+        if self.client is not None:
+            self.client.close()
+
+        client = MultiplayerClient(self.player_name)
+        ok, message, room_state = client.connect_and_join(
+            host_address=selected.host_address,
+            host_port=selected.host_port,
+            room_id=selected.room_id,
+            password=self.join_password,
+        )
+        if not ok or room_state is None:
+            client.close()
+            self.client = None
+            self.message = message
+            return
+        self.client = client
+        self.room_state = room_state
+        self.mode = self.MODE_ROOM
+        self.is_host = False
+        self.message = message
+
+    def _handle_create_click(self, mouse_pos: tuple[int, int], screen_rect: pygame.Rect) -> Optional[ScreenResult]:
+        panel = self._main_panel_rect(screen_rect)
+        room_name_rect = pygame.Rect(panel.centerx - 290, panel.y + 130, 580, 58)
+        room_pwd_rect = pygame.Rect(panel.centerx - 290, panel.y + 214, 580, 58)
+        if room_name_rect.collidepoint(mouse_pos):
+            self.focus_field = "create_room_name"
+            return None
+        if room_pwd_rect.collidepoint(mouse_pos):
+            self.focus_field = "create_password"
+            return None
+
+        cap_rects = self._capacity_button_rects(panel)
+        for capacity, rect in cap_rects.items():
+            if rect.collidepoint(mouse_pos):
+                self.create_capacity = capacity
+                self.message = f"Capacity set to {capacity}."
+                return None
+
+        buttons = self._create_button_rects(panel)
+        if buttons["cancel"].collidepoint(mouse_pos):
+            self.mode = self.MODE_LOBBY
+            self.focus_field = "player_name"
+            self.message = "Room creation canceled."
+            return None
+        if buttons["confirm"].collidepoint(mouse_pos):
+            self._create_host_room()
+            return None
+        return None
+
+    def _create_host_room(self) -> None:
+        room_name = self.create_room_name.strip() or "UNO Room"
+        host_name = self.player_name.strip() or "Host"
+
+        self._leave_room(keep_message=True)
+        try:
+            self.host = MultiplayerHost(
+                host_name=host_name,
+                room_name=room_name,
+                password=self.create_password,
+                capacity=self.create_capacity,
+            )
+        except OSError as exc:
+            self.host = None
+            self.message = f"Could not host room: {exc}"
+            return
+        except ValueError as exc:
+            self.host = None
+            self.message = str(exc)
+            return
+
+        self.mode = self.MODE_ROOM
+        self.is_host = True
+        self.room_state = self.host.room_state
+        room_id = str(self.room_state.get("room_id", "------"))
+        self.message = f"Room created. Share code: {room_id}"
+
+    def _handle_room_click(
+        self,
+        mouse_pos: tuple[int, int],
+        screen_rect: pygame.Rect,
+        now_ms: int,
+    ) -> Optional[ScreenResult]:
+        panel = self._main_panel_rect(screen_rect)
+        room = self.room_state or {}
+        started = bool(room.get("started", False))
+        buttons = self._room_button_rects(panel, started=started)
+
+        if buttons["leave"].collidepoint(mouse_pos):
+            self._leave_room()
+            return None
+
+        if self.is_host and not started and buttons["start"].collidepoint(mouse_pos):
+            self._start_host_match(now_ms)
+            return None
+        return None
+
+    def _start_host_match(self, now_ms: int) -> None:
+        if self.host is None:
+            self.message = "Host room not available."
+            return
+        ok, message, summary = self.host.start_match()
+        self.message = message
+        self.room_state = self.host.room_state
+        if not ok or summary is None:
+            return
+        sync_packet = self.host.current_match_sync()
+        if sync_packet is not None:
+            self._maybe_enter_network_match(now_ms, sync_packet)
+
+    def _maybe_enter_network_match(self, now_ms: int, sync_packet: dict[str, Any]) -> None:
+        game_payload = sync_packet.get("game")
+        if not isinstance(game_payload, dict):
+            return
+        room_payload = sync_packet.get("room")
+        if isinstance(room_payload, dict):
+            self.room_state = room_payload
+        started = bool((self.room_state or {}).get("started", False))
+        if not started:
+            return
+
+        local_token = self.host.host_player_token if self.is_host and self.host is not None else (
+            self.client.token if self.client is not None else ""
+        )
+        players = (self.room_state or {}).get("players", [])
+        local_canonical_player_id = 0
+        if isinstance(players, list):
+            for index, player in enumerate(players):
+                if isinstance(player, dict) and str(player.get("token", "")) == local_token:
+                    local_canonical_player_id = index
+                    break
+
+        remapped_payload = _remap_game_payload_to_local_view(game_payload, local_canonical_player_id)
+        game = deserialize_game_state(remapped_payload)
+        seat_names_payload = sync_packet.get("seat_names", {})
+        seat_names: dict[int, str] = {}
+        if isinstance(seat_names_payload, dict):
+            for key, value in seat_names_payload.items():
+                try:
+                    canonical_id = int(key)
+                except (TypeError, ValueError):
+                    continue
+                view_id = _canonical_to_view_player(canonical_id, local_canonical_player_id, game.num_players)
+                seat_names[view_id] = str(value)
+
+        next_screen = MultiplayerPlayingScreen(
+            atlas=self.atlas,
+            game=game,
+            audio_settings=self.audio_settings,
+            is_host=self.is_host,
+            host=self.host,
+            client=self.client,
+            local_canonical_player_id=local_canonical_player_id,
+            room_state=self.room_state or {},
+            seat_names=seat_names,
+            initial_seq=int(sync_packet.get("seq", 0) or 0),
+            next_ai_time=now_ms + PlayingScreen.AI_TURN_DELAY_MS,
+        )
+        self.host = None
+        self.client = None
+        self._pending_next_screen = next_screen
+
+    @staticmethod
+    def _main_panel_rect(screen_rect: pygame.Rect) -> pygame.Rect:
+        panel = pygame.Rect(0, 0, min(1180, screen_rect.width - 96), screen_rect.height - 170)
+        panel.center = (screen_rect.centerx, screen_rect.centery + 38)
+        return panel
+
+    @staticmethod
+    def _player_name_input_rect(panel: pygame.Rect) -> pygame.Rect:
+        return pygame.Rect(panel.x + 28, panel.y + 72, 420, 56)
+
+    @staticmethod
+    def _join_password_input_rect(panel: pygame.Rect) -> pygame.Rect:
+        return pygame.Rect(panel.x + 464, panel.y + 72, 420, 56)
+
+    @staticmethod
+    def _room_row_rects(panel: pygame.Rect, count: int) -> list[pygame.Rect]:
+        row_h = 62
+        start_y = panel.y + 150
+        max_rows = max(0, min(7, count))
+        return [pygame.Rect(panel.x + 28, start_y + idx * (row_h + 12), panel.width - 56, row_h) for idx in range(max_rows)]
+
+    @staticmethod
+    def _lobby_button_rects(panel: pygame.Rect) -> dict[str, pygame.Rect]:
+        button_h = 62
+        button_w = 228
+        y = panel.bottom - button_h - 26
+        gap = 18
+        return {
+            "create": pygame.Rect(panel.x + 28, y, button_w, button_h),
+            "join": pygame.Rect(panel.x + 28 + button_w + gap, y, button_w, button_h),
+            "back": pygame.Rect(panel.right - button_w - 28, y, button_w, button_h),
+        }
+
+    @staticmethod
+    def _create_button_rects(panel: pygame.Rect) -> dict[str, pygame.Rect]:
+        button_w = 240
+        button_h = 64
+        gap = 24
+        y = panel.bottom - 114
+        return {
+            "confirm": pygame.Rect(panel.centerx - button_w - gap // 2, y, button_w, button_h),
+            "cancel": pygame.Rect(panel.centerx + gap // 2, y, button_w, button_h),
+        }
+
+    @staticmethod
+    def _capacity_button_rects(panel: pygame.Rect) -> dict[int, pygame.Rect]:
+        button_w = 100
+        button_h = 56
+        y = panel.y + 296
+        return {
+            2: pygame.Rect(panel.centerx - 130, y, button_w, button_h),
+            4: pygame.Rect(panel.centerx - 10, y, button_w, button_h),
+        }
+
+    @staticmethod
+    def _room_button_rects(panel: pygame.Rect, started: bool) -> dict[str, pygame.Rect]:
+        button_h = 62
+        y = panel.bottom - 102
+        leave_rect = pygame.Rect(panel.right - 280, y, 240, button_h)
+        start_rect = pygame.Rect(panel.x + 40, y, 240, button_h)
+        return {"start": start_rect, "leave": leave_rect}
+
+    @staticmethod
+    def _draw_input_box(screen: pygame.Surface, rect: pygame.Rect, text: str, focused: bool) -> None:
+        fill = (42, 52, 66) if not focused else (55, 76, 92)
+        border = SETTINGS_ACTIVE_BORDER if focused else SETTINGS_IDLE_BORDER
+        draw_theme_button(screen, rect, text, fill, border, text_color=(236, 241, 246), selected=focused)
 
 
 class EndScreen(BaseScreen):
@@ -634,6 +1320,7 @@ class PlayingScreen(BaseScreen):
         self.pause_hovered_button: str | None = None
         self.screen_shake_remaining_ms = 0
         self.screen_shake_offset: tuple[int, int] = (0, 0)
+        self._shadow_cache: dict[tuple[int, int, int], pygame.Surface] = {}
 
     @property
     def wants_bgm(self) -> bool:
@@ -779,6 +1466,8 @@ class PlayingScreen(BaseScreen):
             direction_arrow_angle=self.direction_arrow_angle,
             wild_hovered_color=self.wild_hovered_color,
             draw_decision_card=self.pending_draw_decision_card,
+            player_names=self._player_name_map(),
+            local_player_id=self._local_player_id(),
         )
         self._draw_active_cards(render_target)
         self._draw_hand_transfer_cards(render_target)
@@ -799,6 +1488,12 @@ class PlayingScreen(BaseScreen):
 
         if self.pause_menu_open:
             self._draw_pause_menu(screen)
+
+    def _player_name_map(self) -> dict[int, str] | None:
+        return None
+
+    def _local_player_id(self) -> int:
+        return 0
 
     def _trigger_screen_shake(self, duration_ms: int | None = None) -> None:
         self.screen_shake_remaining_ms = max(self.screen_shake_remaining_ms, duration_ms or self.SHAKE_DURATION_MS)
@@ -910,8 +1605,9 @@ class PlayingScreen(BaseScreen):
             "resume": "RESUME",
             "return_title": "RETURN TO TITLE",
         }
+        button_rects = self._pause_button_rects(screen_rect)
         for idx, option in enumerate(self.PAUSE_MENU_OPTIONS):
-            rect = self._pause_button_rects(screen_rect)[option]
+            rect = button_rects[option]
             is_selected = idx == self.pause_selected_index
             is_hovered = option == self.pause_hovered_button
             if option == "return_title":
@@ -1568,11 +2264,20 @@ class PlayingScreen(BaseScreen):
         if not self.active_cards and self.game.is_animating:
             self.game.is_animating = False
 
+    def _get_shadow_surface(self, width: int, height: int, alpha: int) -> pygame.Surface:
+        key = (width, height, alpha)
+        shadow = self._shadow_cache.get(key)
+        if shadow is not None:
+            return shadow
+        shadow = pygame.Surface((width, height), pygame.SRCALPHA)
+        pygame.draw.ellipse(shadow, (0, 0, 0, alpha), shadow.get_rect())
+        self._shadow_cache[key] = shadow
+        return shadow
+
     def _draw_active_cards(self, screen: pygame.Surface) -> None:
+        shadow = self._get_shadow_surface(66, 20, 95)
         for active_card in self.active_cards:
             card_center = (int(active_card.current_pos[0]), int(active_card.current_pos[1]))
-            shadow = pygame.Surface((66, 20), pygame.SRCALPHA)
-            pygame.draw.ellipse(shadow, (0, 0, 0, 95), shadow.get_rect())
             shadow_rect = shadow.get_rect(center=(card_center[0], card_center[1] + 10))
             screen.blit(shadow, shadow_rect)
 
@@ -1598,9 +2303,8 @@ class PlayingScreen(BaseScreen):
         if self.hand_transfer_animation is None:
             return
 
+        shadow = self._get_shadow_surface(66, 20, 90)
         for active_card in self.hand_transfer_animation.cards:
-            shadow = pygame.Surface((66, 20), pygame.SRCALPHA)
-            pygame.draw.ellipse(shadow, (0, 0, 0, 90), shadow.get_rect())
             shadow_rect = shadow.get_rect(
                 center=(int(active_card.current_pos[0]), int(active_card.current_pos[1] + 10))
             )
@@ -1662,3 +2366,397 @@ class PlayingScreen(BaseScreen):
 
     def _hand_card_rect(self, card) -> pygame.Rect:
         return get_card_rect_from_pos(card)
+
+
+class _NetworkGameProxy:
+    def __init__(self, base_game: UnoGameManager, submit_callback) -> None:
+        self._base_game = base_game
+        self._submit_callback = submit_callback
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._base_game, name)
+
+    def submit_action(self, action: PlayerAction):
+        return self._submit_callback(
+            {
+                "action_type": action.action_type,
+                "card_index": action.card_index,
+                "chosen_color": action.chosen_color,
+                "chosen_direction": action.chosen_direction,
+                "target_player_id": action.target_player_id,
+                "timestamp_ms": action.timestamp_ms,
+            }
+        )
+
+    def draw_for_decision(self, player_id: int):
+        return self._submit_callback({"action_type": "draw_for_decision"})
+
+    def play_pending_draw_decision(
+        self,
+        player_id: int,
+        chosen_color: Optional[str] = None,
+        timestamp_ms: Optional[int] = None,
+    ):
+        return self._submit_callback(
+            {
+                "action_type": "play_drawn",
+                "chosen_color": chosen_color,
+                "timestamp_ms": timestamp_ms,
+            }
+        )
+
+    def keep_pending_draw_decision(self, player_id: int):
+        return self._submit_callback({"action_type": "keep_drawn"})
+
+
+class MultiplayerPlayingScreen(PlayingScreen):
+    def __init__(
+        self,
+        atlas: CardSpriteAtlas,
+        game: UnoGameManager,
+        audio_settings: AudioSettings,
+        is_host: bool,
+        host: Optional[MultiplayerHost],
+        client: Optional[MultiplayerClient],
+        local_canonical_player_id: int,
+        room_state: dict[str, Any],
+        seat_names: dict[int, str],
+        initial_seq: int = 0,
+        last_message: str = "",
+        next_ai_time: int = 0,
+    ) -> None:
+        self._base_game = game
+        self.is_host_player = is_host
+        self.host = host
+        self.client = client
+        self.local_canonical_player_id = local_canonical_player_id
+        self.room_state = room_state
+        self.seat_names = seat_names
+        self._last_sync_seq = initial_seq
+        proxy = _NetworkGameProxy(game, self._submit_network_action)
+        super().__init__(
+            atlas=atlas,
+            game=proxy,  # type: ignore[arg-type]
+            audio_settings=audio_settings,
+            last_message=last_message or "Multiplayer match synchronized.",
+            next_ai_time=next_ai_time,
+        )
+        self._pending_network_message = ""
+        self._action_in_flight = False
+
+    def _handoff_to_room_screen(self, message: str) -> BaseScreen:
+        next_screen = MultiplayerScreen(self.atlas, self.audio_settings)
+        next_screen.mode = MultiplayerScreen.MODE_ROOM
+        next_screen.is_host = self.is_host_player
+        next_screen.host = self.host
+        next_screen.client = self.client
+        if self.is_host_player and self.host is not None:
+            next_screen.room_state = self.host.room_state
+        else:
+            next_screen.room_state = self.room_state
+        next_screen.message = message
+        self.host = None
+        self.client = None
+        return next_screen
+
+    def _player_name_map(self) -> dict[int, str] | None:
+        return self.seat_names
+
+    def _local_player_id(self) -> int:
+        return 0
+
+    def _submit_network_action(self, action_payload: dict[str, Any]) -> ActionResult:
+        if self._action_in_flight:
+            return ActionResult(False, "Waiting for host synchronization...")
+        mapped = dict(action_payload)
+        target = mapped.get("target_player_id")
+        if target is not None:
+            mapped["target_player_id"] = _view_to_canonical_player(
+                int(target),
+                self.local_canonical_player_id,
+                self._base_game.num_players,
+            )
+        now_ms = int(pygame.time.get_ticks())
+        if self.is_host_player and self.host is not None:
+            result = self.host.apply_host_action(mapped, now_ms=now_ms)
+            if not result.ok:
+                self._pending_network_message = result.message
+                return ActionResult(False, result.message)
+            self._action_in_flight = True
+            return ActionResult(False, "Waiting for host synchronization...")
+        if self.client is not None:
+            self.client.send({"type": "submit_action", "action": mapped, "now_ms": now_ms})
+            self._action_in_flight = True
+            return ActionResult(False, "Action sent. Waiting for host...")
+        return ActionResult(False, "Multiplayer link not available.")
+
+    def _sync_from_packet(self, packet: dict[str, Any]) -> None:
+        seq = int(packet.get("seq", 0) or 0)
+        if seq <= self._last_sync_seq:
+            return
+        game_payload = packet.get("game")
+        if not isinstance(game_payload, dict):
+            return
+        previous_game = self._base_game
+        remapped_payload = _remap_game_payload_to_local_view(game_payload, self.local_canonical_player_id)
+        self._base_game = deserialize_game_state(remapped_payload)
+        self._preserve_local_hand_visual_state(previous_game)
+        self.game = _NetworkGameProxy(self._base_game, self._submit_network_action)  # type: ignore[assignment]
+        self.display_top_card = self.game.top_discard
+        self._last_sync_seq = seq
+        self._action_in_flight = False
+        self._prune_hidden_hand_cards()
+        pending_draw_card = self.game.pending_draw_decision_card
+        if self.game.pending_draw_decision_player == 0 and pending_draw_card is not None:
+            self.pending_draw_decision_card = pending_draw_card
+        else:
+            self.pending_draw_decision_card = None
+            self.pending_draw_decision_choosing_color = False
+        event = packet.get("event")
+        if isinstance(event, dict):
+            self._spawn_remote_event_animation(event, previous_game)
+            message = str(event.get("message", "")).strip()
+            if message:
+                self.last_message = message
+
+    def _preserve_local_hand_visual_state(self, previous_game: UnoGameManager) -> None:
+        if not previous_game.player_hands or not self._base_game.player_hands:
+            return
+        previous_hand = list(previous_game.player_hands[0])
+        current_hand = self._base_game.player_hands[0]
+        if not previous_hand or not current_hand:
+            return
+
+        previous_by_signature: dict[tuple[Optional[str], str, Optional[int], Optional[str]], list[Card]] = {}
+        for card in previous_hand:
+            previous_by_signature.setdefault(_card_signature(card), []).append(card)
+
+        for card in current_hand:
+            signature = _card_signature(card)
+            matches = previous_by_signature.get(signature)
+            if not matches:
+                continue
+            previous_card = matches.pop(0)
+            card.current_pos = previous_card.current_pos
+            card.target_pos = previous_card.target_pos
+            card.current_rotation = previous_card.current_rotation
+            card.target_rotation = previous_card.target_rotation
+            card.current_scale = previous_card.current_scale
+            card.target_scale = previous_card.target_scale
+
+    def _prune_hidden_hand_cards(self) -> None:
+        known_card_ids = {id(card) for hand in self._base_game.player_hands for card in hand}
+        self.hidden_hand_card_ids.intersection_update(known_card_ids)
+
+    def _find_removed_local_card(self, previous_game: UnoGameManager, reference_card: Card) -> Optional[Card]:
+        if not previous_game.player_hands or not self._base_game.player_hands:
+            return None
+        signature = _card_signature(reference_card)
+        previous_matches = [card for card in previous_game.player_hands[0] if _card_signature(card) == signature]
+        if not previous_matches:
+            return None
+        current_count = sum(1 for card in self._base_game.player_hands[0] if _card_signature(card) == signature)
+        removed_count = len(previous_matches) - current_count
+        if removed_count <= 0:
+            return None
+        return previous_matches[-1]
+
+    def _find_added_local_card(self, previous_game: UnoGameManager, reference_card: Card) -> Optional[Card]:
+        if not previous_game.player_hands or not self._base_game.player_hands:
+            return None
+        signature = _card_signature(reference_card)
+        previous_count = sum(1 for card in previous_game.player_hands[0] if _card_signature(card) == signature)
+        current_cards = [card for card in self._base_game.player_hands[0] if _card_signature(card) == signature]
+        if len(current_cards) <= previous_count:
+            return None
+        return current_cards[-1]
+
+    def _spawn_remote_event_animation(self, event: dict[str, Any], previous_game: UnoGameManager) -> None:
+        actor_raw = event.get("actor_id")
+        try:
+            actor_canonical = int(actor_raw)
+        except (TypeError, ValueError):
+            return
+        actor_id = _canonical_to_view_player(
+            actor_canonical,
+            self.local_canonical_player_id,
+            self._base_game.num_players,
+        )
+        action = str(event.get("action", "")).strip().lower()
+        played_payload = event.get("played_card")
+        drew_payload = event.get("drew_card")
+        played_card = None
+        drew_card = None
+        if isinstance(played_payload, dict):
+            played_card = Card(
+                color=played_payload.get("color"),
+                kind=str(played_payload.get("kind", "")),
+                number=played_payload.get("number"),
+            )
+            chosen = played_payload.get("chosen_color")
+            played_card.chosen_color = str(chosen) if chosen is not None else None
+        if isinstance(drew_payload, dict):
+            drew_card = Card(
+                color=drew_payload.get("color"),
+                kind=str(drew_payload.get("kind", "")),
+                number=drew_payload.get("number"),
+            )
+            chosen = drew_payload.get("chosen_color")
+            drew_card.chosen_color = str(chosen) if chosen is not None else None
+
+        screen_rect = pygame.display.get_surface().get_rect() if pygame.display.get_surface() else pygame.Rect(0, 0, 1920, 1080)
+        if played_card is not None and action in {"play", "draw_play", "rule_0", "rule_7"}:
+            start_pos = get_player_anchor_point(screen_rect, actor_id, self._base_game.num_players)
+            source_card = played_card
+            start_rotation = get_player_card_rotation(actor_id, self._base_game.num_players)
+            if actor_id == 0 and action != "draw_play":
+                removed_local_card = self._find_removed_local_card(previous_game, played_card)
+                if removed_local_card is not None:
+                    source_card = removed_local_card
+                    start_pos = (
+                        float(removed_local_card.current_pos[0] + 44.0),
+                        float(removed_local_card.current_pos[1] + 65.0),
+                    )
+                    start_rotation = removed_local_card.current_rotation
+            if action == "draw_play":
+                start_pos = get_draw_pile_rect(screen_rect.width, screen_rect.height).center
+                start_rotation = 0.0
+            self._spawn_active_card(
+                card=source_card,
+                owner_id=actor_id,
+                kind="play",
+                start_pos=start_pos,
+                target_pos=get_discard_pile_rect(screen_rect).center,
+                start_rotation=start_rotation,
+                target_rotation=get_player_card_rotation(actor_id, self._base_game.num_players) + self.ai_rng.uniform(-15.0, 15.0),
+            )
+            return
+        if drew_card is not None and action in {"draw", "draw_keep"}:
+            source_card = drew_card
+            reveal_hand_card = False
+            if actor_id == 0:
+                added_local_card = self._find_added_local_card(previous_game, drew_card)
+                if added_local_card is not None:
+                    source_card = added_local_card
+                    self.hidden_hand_card_ids.add(id(source_card))
+                    reveal_hand_card = True
+            self._spawn_active_card(
+                card=source_card,
+                owner_id=actor_id,
+                kind="draw",
+                start_pos=get_draw_pile_rect(screen_rect.width, screen_rect.height).center,
+                target_pos=get_player_anchor_point(screen_rect, actor_id, self._base_game.num_players),
+                start_rotation=0.0,
+                target_rotation=get_player_card_rotation(actor_id, self._base_game.num_players),
+                reveal_hand_card=reveal_hand_card,
+            )
+            return
+        if action in {"rule_0", "rule_7"}:
+            self._trigger_screen_shake()
+
+    def _close_network(self) -> None:
+        if self.client is not None:
+            self.client.send({"type": "leave"})
+            self.client.close()
+            self.client = None
+        if self.host is not None:
+            self.host.leave_host()
+            self.host = None
+
+    def _activate_pause_menu_option(self, option: str) -> ScreenResult:
+        if option == "return_title":
+            self._close_network()
+        return super()._activate_pause_menu_option(option)
+
+    def _schedule_reaction_ai(self, now_ms: int) -> None:
+        # Host already resolves AI/reaction timing and broadcasts authoritative snapshots.
+        return
+
+    def _submit_ai_reactions(self, now_ms: int) -> None:
+        return
+
+    def _build_ai_hand_transfer_action(self) -> PlayerAction | None:
+        return None
+
+    def update(self, screen: pygame.Surface, now_ms: int) -> Optional[BaseScreen]:
+        if self.client is not None:
+            for packet in self.client.poll_messages():
+                packet_type = packet.get("type")
+                if packet_type == "match_sync":
+                    self._sync_from_packet(packet)
+                elif packet_type == "room_state":
+                    room_payload = packet.get("room")
+                    if isinstance(room_payload, dict):
+                        self.room_state = room_payload
+                        if not bool(room_payload.get("started", False)):
+                            return self._handoff_to_room_screen("Match ended. Returned to room.")
+                elif packet_type == "match_ended":
+                    room_payload = packet.get("room")
+                    if isinstance(room_payload, dict):
+                        self.room_state = room_payload
+                    message = str(packet.get("message", "Match ended. Returned to room.")).strip()
+                    return self._handoff_to_room_screen(message)
+                elif packet_type == "action_ack":
+                    if not packet.get("ok", False):
+                        self._action_in_flight = False
+                        self.last_message = str(packet.get("message", "Action rejected by host."))
+                elif packet_type == "disconnected":
+                    self._close_network()
+                    return TitleScreen(self.atlas, self.audio_settings)
+
+        if self.is_host_player and self.host is not None:
+            sync_packet = self.host.current_match_sync()
+            if sync_packet is not None:
+                self._sync_from_packet(sync_packet)
+            room_snapshot = self.host.room_state
+            self.room_state = room_snapshot
+            if not bool(room_snapshot.get("started", False)):
+                return self._handoff_to_room_screen("Match ended. Returned to room.")
+
+        if self._pending_network_message:
+            self.last_message = self._pending_network_message
+            self._pending_network_message = ""
+
+        dt = 0.0 if self._last_update_ms is None else max(0.0, (now_ms - self._last_update_ms) / 1000.0)
+        self._last_update_ms = now_ms
+        self._update_screen_shake(dt)
+
+        if self.game.winner is not None:
+            winner_name = self.seat_names.get(self.game.winner, f"Player {self.game.winner + 1}")
+            return self._handoff_to_room_screen(f"Match ended. Winner: {winner_name}.")
+
+        if self.pause_menu_open:
+            return None
+
+        self._update_direction_arrow(dt)
+        self._update_active_cards(dt)
+        if self.hand_transfer_animation is not None:
+            self.visual_state = HAND_TRANSFER_ANIMATION
+            self._update_hand_transfer_animation(screen, dt, now_ms)
+            return None
+        self.visual_state = ""
+
+        self.hovered_index = None
+        self.wild_hovered_color = None
+        if self.game.pending_draw_decision_card is None:
+            self.pending_draw_decision_card = None
+            self.pending_draw_decision_choosing_color = False
+
+        if self._wild_color_picker_active():
+            self.wild_hovered_color = get_wild_color_at_pos(pygame.mouse.get_pos(), screen.get_rect())
+
+        if (
+            not self._has_modal_input()
+            and self.game.winner is None
+            and self.game.current_player == 0
+        ):
+            self.hovered_index = get_hovered_hand_index(
+                pygame.mouse.get_pos(),
+                self.game.player_hands[0],
+                screen.get_width(),
+                screen.get_height(),
+                hidden_card_ids=self.hidden_hand_card_ids,
+            )
+
+        self._update_player_hand_animation(screen, dt)
+        return None

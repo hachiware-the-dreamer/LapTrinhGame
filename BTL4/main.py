@@ -35,12 +35,16 @@ def main() -> None:
 
     current_screen = TitleScreen(atlas, audio_settings)
     bgm_playing = False
+    last_music_mix: float | None = None
 
     running = True
     while running:
         now = pygame.time.get_ticks()
         if bgm_loaded:
-            pygame.mixer.music.set_volume(audio_settings.music_mix())
+            current_mix = audio_settings.music_mix()
+            if last_music_mix is None or abs(current_mix - last_music_mix) >= 0.01:
+                pygame.mixer.music.set_volume(current_mix)
+                last_music_mix = current_mix
 
         if bgm_loaded and current_screen.wants_bgm:
             if not bgm_playing:

@@ -120,6 +120,7 @@ def _direction_arrow_icon() -> pygame.Surface | None:
     return _safe_load_image(DIRECTION_ICON_PATH)
 
 
+@lru_cache(maxsize=128)
 def _scaled_font(width: int, height: int, size: int, bold: bool = False) -> pygame.font.Font:
     scaled_size = _clamp(int(size * _ui_scale(width, height)), 14, size)
     if LILITA_FONT_PATH.exists():
@@ -499,6 +500,7 @@ def _draw_opponent_hands(
     game: UnoGameManager,
     atlas: CardSpriteAtlas,
     body_font: pygame.font.Font,
+    player_names: dict[int, str] | None = None,
 ) -> None:
     width, height = screen.get_size()
     back_h = atlas.get_back_surface(*OPPONENT_HORIZONTAL_SIZE)
@@ -518,7 +520,8 @@ def _draw_opponent_hands(
             _blit_card_shadow(screen, rect.center, rect.size, alpha=70, y_offset=6, spread=0.76)
             screen.blit(image, rect)
 
-        label = body_font.render(f"P{pid + 1}: {len(game.player_hands[pid])}", True, TEXT_LIGHT)
+        player_name = (player_names or {}).get(pid, f"Player {pid + 1}")
+        label = body_font.render(f"{player_name}: {len(game.player_hands[pid])}", True, TEXT_LIGHT)
         if position == "top" and rects:
             label_rect = label.get_rect(center=(width // 2, rects[0].top - TOP_OPPONENT_LABEL_GAP))
         elif position == "left" and rects:
@@ -530,7 +533,10 @@ def _draw_opponent_hands(
         panel_rect = label_rect.inflate(28, 14)
         panel = pygame.Surface(panel_rect.size, pygame.SRCALPHA)
         pygame.draw.rect(panel, (*DARK_PANEL, 205), panel.get_rect(), border_radius=10)
-        pygame.draw.rect(panel, (*LIGHT_BORDER, 86), panel.get_rect(), width=2, border_radius=10)
+        is_current_turn = pid == game.current_player
+        border_color = (255, 220, 120, 210) if is_current_turn else (*LIGHT_BORDER, 86)
+        border_width = 3 if is_current_turn else 2
+        pygame.draw.rect(panel, border_color, panel.get_rect(), width=border_width, border_radius=10)
         screen.blit(panel, panel_rect)
         screen.blit(label, label_rect)
 
@@ -852,6 +858,8 @@ def render_ui(
     direction_arrow_angle: float = 0.0,
     wild_hovered_color: str | None = None,
     draw_decision_card: Card | None = None,
+    player_names: dict[int, str] | None = None,
+    local_player_id: int = 0,
 ) -> None:
     width, height = screen.get_size()
     _draw_table_background(screen)
@@ -914,9 +922,14 @@ def render_ui(
     _draw_hud_glass_panel(screen, left_panel, alpha=174)
     _draw_hud_glass_panel(screen, right_panel, alpha=174)
 
+    current_turn_name = (player_names or {}).get(game.current_player, f"Player {game.current_player + 1}")
+    if game.current_player == local_player_id:
+        turn_title = f"Your Turn ({current_turn_name})"
+    else:
+        turn_title = f"Turn: {current_turn_name}"
     turn_lbl = _render_fit_text(
         title_font,
-        f"Player {game.current_player + 1} Turn",
+        turn_title,
         TEXT_LIGHT,
         left_panel.width - 26,
     )
@@ -965,7 +978,7 @@ def render_ui(
         pygame.draw.rect(screen, (64, 47, 24), badge_bg.inflate(24, 14), border_radius=10)
         screen.blit(badge, badge_bg)
 
-    _draw_opponent_hands(screen, game, atlas, body_font)
+    _draw_opponent_hands(screen, game, atlas, body_font, player_names=player_names)
 
     if last_message:
         max_status_width = max(240, min(int(width * 0.30), width // 2 - header_margin - 100))
