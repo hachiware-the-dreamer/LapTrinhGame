@@ -1185,7 +1185,7 @@ def render_multiplayer_screen(screen: pygame.Surface) -> None:
     _draw_button(screen, button_rects["back"], "Back", (94, 102, 116), border=(150, 158, 172))
 
     footer_font = _scaled_font(width, height, 18)
-    footer = footer_font.render("Host and Join features coming soon...", True, (170, 180, 190))
+    footer = footer_font.render("Create or join host-authoritative UNO rooms.", True, (170, 180, 190))
     screen.blit(footer, footer.get_rect(center=(width // 2, height - 100)))
 
 

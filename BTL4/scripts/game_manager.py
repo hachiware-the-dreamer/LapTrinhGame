@@ -276,7 +276,7 @@ class UnoGameManager:
         self.discard_pile.append(card)
         self.current_color = chosen_color if chosen_color is not None else card.color
 
-        if card.kind == "number" and card.number == 0:
+        if card.kind == "number" and card.number == 0 and self.settings.rule_0_enabled:
             self.pending_effect = RULE_ZERO_DIRECTION
             self.pending_effect_player = player_id
             return self._apply_uno_check(
@@ -284,7 +284,7 @@ class UnoGameManager:
                 ActionResult(True, "Rule of 0: choose hand pass direction.", played_card=card),
             )
 
-        if card.kind == "number" and card.number == 7:
+        if card.kind == "number" and card.number == 7 and self.settings.rule_7_enabled:
             self.pending_effect = RULE_SEVEN_TARGET
             self.pending_effect_player = player_id
             return self._apply_uno_check(
@@ -292,7 +292,7 @@ class UnoGameManager:
                 ActionResult(True, "Rule of 7: choose a target player to swap hands with.", played_card=card),
             )
 
-        if card.kind == "number" and card.number == 8:
+        if card.kind == "number" and card.number == 8 and self.settings.rule_8_enabled:
             self.pending_effect = RULE_REACTION
             self.pending_effect_player = player_id
             started_at = timestamp_ms or 0
@@ -310,12 +310,7 @@ class UnoGameManager:
             return ActionResult(True, f"Player {player_id + 1} wins!", played_card=card)
 
         self._apply_played_card_effect(card)
-        
-        # Debug logging
-        direction_str = "Clockwise" if self.turn_direction == 1 else "Counter-Clockwise"
-        next_player = self._next_player_index(self.turn_direction)
-        print(f"[TURN DEBUG] Player {player_id} played {card.short_label}. Current Direction: {direction_str}. Next player should be: Player {next_player}.")
-        
+
         return self._apply_uno_check(player_id, ActionResult(True, "Card played.", played_card=card))
 
     def call_uno(self, player_id: int) -> ActionResult:
@@ -329,7 +324,7 @@ class UnoGameManager:
             return ActionResult(False, "UNO can be called when you have two cards.")
 
         self.uno_called_players.add(player_id)
-        return ActionResult(True, f"player {player_id + 1} tay` roi", uno_call_player=player_id)
+        return ActionResult(True, f"Player {player_id + 1} called UNO.", uno_call_player=player_id)
 
     def _apply_uno_check(self, player_id: int, result: ActionResult) -> ActionResult:
         if not result.ok:
@@ -341,14 +336,14 @@ class UnoGameManager:
             return result
 
         if player_id in self.uno_called_players:
-            if "tay` roi" not in result.message:
-                result.message = f"{result.message} player {player_id + 1} tay` roi"
+            if "called UNO" not in result.message:
+                result.message = f"{result.message} Player {player_id + 1} called UNO."
             return result
 
         penalty_cards = [self.draw_from_pile() for _ in range(2)]
         self.player_hands[player_id].extend(penalty_cards)
         self.uno_called_players.discard(player_id)
-        result.message = f"chua tay` dau! Player {player_id + 1} drew 2 cards."
+        result.message = f"UNO was not called. Player {player_id + 1} drew 2 cards."
         result.uno_caught_player = player_id
         result.uno_penalty_cards = penalty_cards
         return result
@@ -462,6 +457,9 @@ class UnoGameManager:
             return
 
         if card.kind == ACTION_REVERSE:
+            if self.num_players == 2 and self.settings.two_player_reverse_behavior == "skip":
+                self._advance_turn(2)
+                return
             self.turn_direction *= -1
             self._advance_turn(1)
             return

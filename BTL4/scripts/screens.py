@@ -145,6 +145,7 @@ class AudioSettings:
 class ScreenResult:
     next_screen: Optional["BaseScreen"] = None
     running: bool = True
+    display_mode: Optional[str] = None
 
 
 @dataclass
@@ -762,16 +763,11 @@ class MultiplayerScreen(BaseScreen):
         if not started:
             return
 
-        local_token = self.host.host_player_token if self.is_host and self.host is not None else (
-            self.client.token if self.client is not None else ""
-        )
-        players = (self.room_state or {}).get("players", [])
         local_canonical_player_id = 0
-        if isinstance(players, list):
-            for index, player in enumerate(players):
-                if isinstance(player, dict) and str(player.get("token", "")) == local_token:
-                    local_canonical_player_id = index
-                    break
+        if self.is_host and self.host is not None:
+            local_canonical_player_id = 0
+        elif self.client is not None and self.client.seat_index is not None:
+            local_canonical_player_id = self.client.seat_index
 
         remapped_payload = _remap_game_payload_to_local_view(game_payload, local_canonical_player_id)
         game = deserialize_game_state(remapped_payload)
@@ -1161,6 +1157,8 @@ class GameSettingsScreen(BaseScreen):
 
 class MainSettingsScreen(BaseScreen):
     state_name = "main_settings"
+    DISPLAY_WINDOWED = "windowed"
+    DISPLAY_FULLSCREEN = "fullscreen"
 
     def __init__(self, atlas: CardSpriteAtlas, audio_settings: AudioSettings) -> None:
         self.atlas = atlas
@@ -1180,11 +1178,26 @@ class MainSettingsScreen(BaseScreen):
     @staticmethod
     def _slider_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
         start_y = int(screen_rect.height * 0.28)
-        row_gap = int(screen_rect.height * 0.17)
+        row_gap = int(screen_rect.height * 0.14)
         return {
             "master": pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, start_y, SETTINGS_SLIDER_WIDTH, 30),
             "music": pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, start_y + row_gap, SETTINGS_SLIDER_WIDTH, 30),
             "sfx": pygame.Rect(screen_rect.centerx - SETTINGS_SLIDER_WIDTH // 2, start_y + row_gap * 2, SETTINGS_SLIDER_WIDTH, 30),
+        }
+
+    @staticmethod
+    def _display_mode_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
+        button_w = 220
+        button_h = 60
+        spacing = 32
+        bottom_buttons = MainSettingsScreen._button_rects(screen_rect)
+        slider_rects = MainSettingsScreen._slider_rects(screen_rect)
+        preferred_y = slider_rects["sfx"].bottom + max(68, int(screen_rect.height * 0.095))
+        y = min(preferred_y, bottom_buttons["back"].y - button_h - 42)
+        left_x = screen_rect.centerx - (button_w * 2 + spacing) // 2
+        return {
+            MainSettingsScreen.DISPLAY_WINDOWED: pygame.Rect(left_x, y, button_w, button_h),
+            MainSettingsScreen.DISPLAY_FULLSCREEN: pygame.Rect(left_x + button_w + spacing, y, button_w, button_h),
         }
 
     @staticmethod
@@ -1206,6 +1219,13 @@ class MainSettingsScreen(BaseScreen):
         elif slider_name == "sfx":
             self.audio_settings.sfx_volume = stepped_value
 
+    @staticmethod
+    def _current_display_mode() -> str:
+        surface = pygame.display.get_surface()
+        if surface is not None and surface.get_flags() & pygame.FULLSCREEN:
+            return MainSettingsScreen.DISPLAY_FULLSCREEN
+        return MainSettingsScreen.DISPLAY_WINDOWED
+
     def handle_events(
         self,
         events: list[pygame.event.Event],
@@ -1224,6 +1244,10 @@ class MainSettingsScreen(BaseScreen):
                         self.dragging_slider = slider_name
                         self._set_slider_value(slider_name, rect, mouse_pos[0])
                         break
+
+                for display_mode, rect in self._display_mode_rects(screen.get_rect()).items():
+                    if rect.collidepoint(mouse_pos):
+                        return ScreenResult(display_mode=display_mode)
 
                 back_rect = self._button_rects(screen.get_rect())["back"]
                 if back_rect.collidepoint(mouse_pos):
@@ -1267,6 +1291,20 @@ class MainSettingsScreen(BaseScreen):
             GameSettingsScreen._draw_slider(screen, rect, value)
             value_text = font_label.render(f"{int(round(value * 100))}%", True, (255, 255, 255))
             screen.blit(value_text, (rect.right + 40, rect.centery - 14))
+
+        display_rects = self._display_mode_rects(screen_rect)
+        display_label = font_section.render("Display:", True, (255, 255, 255))
+        screen.blit(display_label, (section_x, display_rects[self.DISPLAY_WINDOWED].y - 54))
+        active_mode = self._current_display_mode()
+        display_labels = {
+            self.DISPLAY_WINDOWED: "WINDOWED",
+            self.DISPLAY_FULLSCREEN: "FULLSCREEN",
+        }
+        for display_mode, rect in display_rects.items():
+            selected = display_mode == active_mode
+            fill = SETTINGS_ACTIVE_FILL if selected else SETTINGS_IDLE_FILL
+            border = SETTINGS_ACTIVE_BORDER if selected else SETTINGS_IDLE_BORDER
+            self._draw_button(screen, rect, display_labels[display_mode], fill, border)
 
         back_rect = self._button_rects(screen_rect)["back"]
         self._draw_button(screen, back_rect, "BACK", SETTINGS_DANGER_FILL, SETTINGS_DANGER_BORDER)

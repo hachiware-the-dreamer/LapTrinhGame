@@ -7,7 +7,7 @@ import socket
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from queue import Empty, Queue
 from typing import Any, Optional
 
@@ -25,6 +25,9 @@ DISCOVERY_PORT = 43841
 DISCOVERY_INTERVAL_SEC = 1.0
 ROOM_TTL_SEC = 3.2
 MAX_PACKET_SIZE = 65536
+MAX_TCP_LINE_SIZE = 65536
+MAX_DISPLAY_NAME_LENGTH = 24
+MAX_ROOM_NAME_LENGTH = 32
 
 
 @dataclass
@@ -87,6 +90,7 @@ class _HostedRoomState:
     capacity: int
     host_name: str
     host_token: str
+    settings: GameSettings = field(default_factory=GameSettings)
     humans: list[HumanPlayer] = field(default_factory=list)
     started: bool = False
     match: Optional["HostAuthoritativeMatch"] = None
@@ -116,7 +120,7 @@ class HostAuthoritativeMatch:
         self.human_tokens = [player.token for player in room.humans]
         self.human_names = [player.display_name for player in room.humans]
 
-        settings = GameSettings(num_players=room.capacity)
+        settings = replace(room.settings, num_players=room.capacity)
         self.game = UnoGameManager(settings=settings)
 
         self.seat_token: dict[int, str] = {}
@@ -157,7 +161,7 @@ class HostAuthoritativeMatch:
     def serialize_game_state(self) -> dict[str, Any]:
         return _serialize_game_state(self.game)
 
-    def _action_from_payload(self, player_id: int, payload: dict[str, Any]) -> PlayerAction:
+    def _action_from_payload(self, player_id: int, payload: dict[str, Any], now_ms: int) -> PlayerAction:
         return PlayerAction(
             player_id=player_id,
             action_type=str(payload.get("action_type", "")),
@@ -165,10 +169,10 @@ class HostAuthoritativeMatch:
             chosen_color=payload.get("chosen_color"),
             chosen_direction=payload.get("chosen_direction"),
             target_player_id=payload.get("target_player_id"),
-            timestamp_ms=payload.get("timestamp_ms"),
+            timestamp_ms=now_ms,
         )
 
-    def _apply_action_payload(self, player_id: int, payload: dict[str, Any]):
+    def _apply_action_payload(self, player_id: int, payload: dict[str, Any], now_ms: int):
         action_type = str(payload.get("action_type", ""))
         if action_type == "draw_for_decision":
             return self.game.draw_for_decision(player_id)
@@ -178,9 +182,9 @@ class HostAuthoritativeMatch:
             return self.game.play_pending_draw_decision(
                 player_id,
                 chosen_color=payload.get("chosen_color"),
-                timestamp_ms=payload.get("timestamp_ms"),
+                timestamp_ms=now_ms,
             )
-        return self.game.submit_action(self._action_from_payload(player_id, payload))
+        return self.game.submit_action(self._action_from_payload(player_id, payload, now_ms))
 
     def _event_from_action(self, player_id: int, payload: dict[str, Any], result) -> dict[str, Any]:
         action_type = str(payload.get("action_type", ""))
@@ -223,7 +227,7 @@ class HostAuthoritativeMatch:
                     "chosen_direction": random.choice([1, -1]),
                     "timestamp_ms": now_ms,
                 }
-                result = self._apply_action_payload(current, choice_payload)
+                result = self._apply_action_payload(current, choice_payload, now_ms)
                 events.append(self._event_from_action(current, choice_payload, result))
                 if not result.ok:
                     break
@@ -238,7 +242,7 @@ class HostAuthoritativeMatch:
                     "target_player_id": random.choice(targets),
                     "timestamp_ms": now_ms,
                 }
-                result = self._apply_action_payload(current, choice_payload)
+                result = self._apply_action_payload(current, choice_payload, now_ms)
                 events.append(self._event_from_action(current, choice_payload, result))
                 if not result.ok:
                     break
@@ -267,7 +271,7 @@ class HostAuthoritativeMatch:
                         "action_type": "keep_drawn",
                         "timestamp_ms": now_ms,
                     }
-                result = self._apply_action_payload(current, decision_payload)
+                result = self._apply_action_payload(current, decision_payload, now_ms)
                 events.append(self._event_from_action(current, decision_payload, result))
                 if not result.ok:
                     break
@@ -291,7 +295,7 @@ class HostAuthoritativeMatch:
         if player_id is None:
             return HostActionResult(False, "Player is not registered in this match.")
 
-        result = self._apply_action_payload(player_id, payload)
+        result = self._apply_action_payload(player_id, payload, now_ms)
         if not result.ok:
             return HostActionResult(False, result.message, events=[])
 
@@ -322,8 +326,9 @@ class HostAuthoritativeMatch:
 
 class MultiplayerClient:
     def __init__(self, display_name: str, token: Optional[str] = None) -> None:
-        self.display_name = display_name.strip() or "Player"
+        self.display_name = _sanitize_display_name(display_name, "Player")
         self.token = token or uuid.uuid4().hex
+        self.seat_index: Optional[int] = None
         self._recv_queue: Queue[dict[str, Any]] = Queue()
         self._conn: Optional[socket.socket] = None
         self._recv_thread: Optional[threading.Thread] = None
@@ -349,7 +354,6 @@ class MultiplayerClient:
             "room_id": room_id,
             "player_name": self.display_name,
             "password": password,
-            "token": self.token,
         }
         if not self._send_raw(join_message):
             self.close()
@@ -361,6 +365,14 @@ class MultiplayerClient:
             return False, "Join request timed out.", None
 
         if response.get("type") == "join_ok":
+            token = response.get("token")
+            if token is not None:
+                self.token = str(token)
+            seat = response.get("seat")
+            try:
+                self.seat_index = int(seat) if seat is not None else None
+            except (TypeError, ValueError):
+                self.seat_index = None
             self._start_receiver_thread()
             return True, "Joined room.", response.get("room")
 
@@ -414,8 +426,12 @@ class MultiplayerClient:
             if not chunk:
                 return None
             buffer += chunk
+            if len(buffer) > MAX_TCP_LINE_SIZE:
+                return None
             if b"\n" in buffer:
                 line, _ = buffer.split(b"\n", 1)
+                if len(line) > MAX_TCP_LINE_SIZE:
+                    return None
                 if not line:
                     continue
                 try:
@@ -440,8 +456,12 @@ class MultiplayerClient:
                 if not chunk:
                     break
                 buffer += chunk
+                if len(buffer) > MAX_TCP_LINE_SIZE and b"\n" not in buffer:
+                    break
                 while b"\n" in buffer:
                     line, buffer = buffer.split(b"\n", 1)
+                    if len(line) > MAX_TCP_LINE_SIZE:
+                        return
                     if not line:
                         continue
                     try:
@@ -463,16 +483,18 @@ class MultiplayerHost:
         password: str,
         capacity: int,
         host_address: str = "0.0.0.0",
+        settings: Optional[GameSettings] = None,
     ) -> None:
         if capacity not in (2, 4):
             raise ValueError("Room capacity must be 2 or 4.")
 
-        self.host_name = host_name.strip() or "Host"
-        self.room_name = room_name.strip() or "UNO Room"
+        self.host_name = _sanitize_display_name(host_name, "Host")
+        self.room_name = _sanitize_room_name(room_name)
         self.password = password
         self.capacity = capacity
         self.host_token = uuid.uuid4().hex
         self.room_id = _new_room_id()
+        self.game_settings = replace(settings or GameSettings(), num_players=capacity)
 
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
@@ -484,6 +506,7 @@ class MultiplayerHost:
             capacity=self.capacity,
             host_name=self.host_name,
             host_token=self.host_token,
+            settings=self.game_settings,
         )
 
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -651,13 +674,14 @@ class MultiplayerHost:
             "started": self._state.started,
             "players": [
                 {
-                    "token": player.token,
+                    "seat": index,
                     "display_name": player.display_name,
                     "is_host": player.is_host,
                 }
-                for player in self._state.humans
+                for index, player in enumerate(self._state.humans)
             ],
             "ai_count": (match.ai_count if match is not None else 0),
+            "settings": _serialize_game_settings(self._state.settings),
         }
 
     def _broadcast_match_sync_locked(self, event: Optional[dict[str, Any]]) -> None:
@@ -712,8 +736,14 @@ class MultiplayerHost:
                     break
 
                 buffer += chunk
+                if len(buffer) > MAX_TCP_LINE_SIZE and b"\n" not in buffer:
+                    break
+                oversized_line = False
                 while b"\n" in buffer:
                     line, buffer = buffer.split(b"\n", 1)
+                    if len(line) > MAX_TCP_LINE_SIZE:
+                        oversized_line = True
+                        break
                     if not line:
                         continue
                     try:
@@ -729,6 +759,8 @@ class MultiplayerHost:
                             with self._lock:
                                 room_payload = self._serialize_room_state()
                             self._broadcast({"type": "room_state", "room": room_payload})
+                if oversized_line:
+                    break
         except OSError:
             pass
         finally:
@@ -764,7 +796,9 @@ class MultiplayerHost:
 
         if msg_type == "submit_action":
             action_payload = payload.get("action") or {}
-            now_ms = int(payload.get("now_ms") or time.time() * 1000)
+            if not isinstance(action_payload, dict):
+                return {"type": "action_ack", "ok": False, "message": "Invalid action payload."}, current_token
+            now_ms = int(time.time() * 1000)
             result = self.validate_human_action(current_token, action_payload, now_ms=now_ms)
             return {"type": "action_ack", "ok": result.ok, "message": result.message}, current_token
 
@@ -777,8 +811,8 @@ class MultiplayerHost:
         addr: tuple[str, int],
     ) -> tuple[dict[str, Any], Optional[str]]:
         room_id = str(payload.get("room_id", "")).strip()
-        player_name = str(payload.get("player_name", "")).strip() or "Player"
-        token = str(payload.get("token", "")).strip() or uuid.uuid4().hex
+        player_name = _sanitize_display_name(str(payload.get("player_name", "")), "Player")
+        token = uuid.uuid4().hex
         password = str(payload.get("password", ""))
 
         with self._lock:
@@ -790,14 +824,15 @@ class MultiplayerHost:
                 return {"type": "join_error", "message": "Incorrect room password."}, None
             if self._state.human_count >= self._state.capacity:
                 return {"type": "join_error", "message": "Room is full."}, None
-            if any(player.token == token for player in self._state.humans):
-                return {"type": "join_error", "message": "Duplicate player token."}, None
+            while any(player.token == token for player in self._state.humans):
+                token = uuid.uuid4().hex
 
+            seat = self._state.human_count
             self._state.humans.append(HumanPlayer(token=token, display_name=player_name, is_host=False))
             self._sessions[token] = _ClientSession(conn=conn, addr=addr, token=token)
             room_payload = self._serialize_room_state()
 
-        return {"type": "join_ok", "room": room_payload, "token": token}, token
+        return {"type": "join_ok", "room": room_payload, "token": token, "seat": seat}, token
 
     def _remove_player(self, token: str) -> None:
         should_close_room = False
@@ -932,8 +967,8 @@ class LobbyBrowser:
 def _room_from_payload(payload: dict[str, Any], source_host: str) -> Optional[LobbyRoomInfo]:
     try:
         room_id = str(payload["room_id"])
-        room_name = str(payload["room_name"])
-        host_name = str(payload["host_name"])
+        room_name = _sanitize_room_name(str(payload["room_name"]))
+        host_name = _sanitize_display_name(str(payload["host_name"]), "Host")
         advertised_host = str(payload["host_address"])
         host_port = int(payload["host_port"])
         capacity = int(payload["capacity"])
@@ -945,6 +980,10 @@ def _room_from_payload(payload: dict[str, Any], source_host: str) -> Optional[Lo
         return None
 
     if capacity not in (2, 4):
+        return None
+    if not 1 <= host_port <= 65535:
+        return None
+    if not room_id or len(room_id) > 16:
         return None
 
     host_address = source_host or advertised_host
@@ -963,6 +1002,20 @@ def _room_from_payload(payload: dict[str, Any], source_host: str) -> Optional[Lo
         started=started,
         last_seen_ts=seen,
     )
+
+
+def _sanitize_display_name(value: str, fallback: str) -> str:
+    cleaned = " ".join(str(value).strip().split())
+    if not cleaned:
+        cleaned = fallback
+    return cleaned[:MAX_DISPLAY_NAME_LENGTH]
+
+
+def _sanitize_room_name(value: str) -> str:
+    cleaned = " ".join(str(value).strip().split())
+    if not cleaned:
+        cleaned = "UNO Room"
+    return cleaned[:MAX_ROOM_NAME_LENGTH]
 
 
 def _new_room_id() -> str:
