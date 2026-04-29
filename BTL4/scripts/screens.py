@@ -43,6 +43,7 @@ from scripts.ui import (
     get_player_card_rotation,
     get_player_hand_rotation,
     get_player_hand_card_rects,
+    get_sort_hand_button_rect,
     get_reaction_button_rect,
     get_rule_seven_target_rects,
     get_rule_zero_choice_rects,
@@ -1812,6 +1813,15 @@ class PlayingScreen(BaseScreen):
         if self.game.current_player != 0 or self.game.pending_effect is not None:
             return
 
+        sort_rect = get_sort_hand_button_rect(screen.get_rect())
+        if sort_rect.collidepoint(mouse_pos):
+            result = self.game.submit_action(
+                PlayerAction(player_id=0, action_type="sort_hand", timestamp_ms=now_ms)
+            )
+            self._record_player_action_result(result, now_ms)
+            self._clamp_selected_index()
+            return
+
         uno_rect = get_uno_button_rect(screen.get_rect())
         if uno_rect.collidepoint(mouse_pos):
             result = self.game.submit_action(
@@ -1892,6 +1902,12 @@ class PlayingScreen(BaseScreen):
                 )
                 self._record_player_action_result(result, now_ms)
                 self._clamp_selected_index()
+        elif event.key == pygame.K_s and self.game.pending_effect is None:
+            result = self.game.submit_action(
+                PlayerAction(player_id=0, action_type="sort_hand", timestamp_ms=now_ms)
+            )
+            self._record_player_action_result(result, now_ms)
+            self._clamp_selected_index()
         elif event.key == pygame.K_d and self.game.pending_effect is None:
             self._draw_for_decision(screen, now_ms)
         elif event.key == pygame.K_u and self.game.pending_effect is None:

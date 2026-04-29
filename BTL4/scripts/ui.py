@@ -649,6 +649,17 @@ def get_uno_button_rect(screen_rect: pygame.Rect) -> pygame.Rect:
     return pygame.Rect(screen_rect.right - margin - button_w, y, button_w, button_h)
 
 
+def get_sort_hand_button_rect(screen_rect: pygame.Rect) -> pygame.Rect:
+    button_w = 154
+    button_h = 64
+    gap = 14
+    margin = max(24, int(screen_rect.width * 0.025))
+    footer_height = _clamp(int(screen_rect.height * 0.045), 34, 48)
+    y = screen_rect.bottom - footer_height - button_h - 22
+    uno_rect = pygame.Rect(screen_rect.right - margin - 128, y, 128, button_h)
+    return pygame.Rect(uno_rect.left - gap - button_w, y, button_w, button_h)
+
+
 def theme_font(width: int, height: int, size: int, bold: bool = False) -> pygame.font.Font:
     return _scaled_font(width, height, size, bold=bold)
 
@@ -990,7 +1001,7 @@ def render_ui(
     footer.fill((0, 0, 0, 82))
     screen.blit(footer, (0, height - footer_height))
 
-    help_line = "Click card: select | Enter/Space: play | Draw pile/D: draw | UNO button/U: call UNO"
+    help_line = "Click card: select | Enter/Space: play | Draw pile/D: draw | Sort button/S: sort hand | UNO button/U: call UNO"
     help_text = _render_fit_text(small_font, help_line, (220, 220, 220), width - header_margin * 2)
     screen.blit(help_text, help_text.get_rect(center=(width // 2, height - footer_height // 2)))
 
@@ -1024,6 +1035,17 @@ def render_ui(
         if i == selected_index:
             pygame.draw.rect(screen, (4, 8, 12), card_rect.inflate(8, 8), width=4, border_radius=12)
             pygame.draw.rect(screen, UNO_YELLOW, card_rect.inflate(6, 6), width=2, border_radius=11)
+
+    sort_rect = get_sort_hand_button_rect(screen_rect)
+    sort_enabled = game.current_player == 0 and game.pending_effect is None and not wild_color_picker_active and draw_decision_card is None
+    draw_theme_button(
+        screen,
+        sort_rect,
+        "SORT HAND",
+        (94, 138, 222) if sort_enabled else (68, 74, 84),
+        selected=sort_enabled,
+        font_size=22,
+    )
 
     uno_rect = get_uno_button_rect(screen_rect)
     uno_enabled = game.current_player == 0 and game.pending_effect is None and len(hand) <= 2 and len(hand) > 0

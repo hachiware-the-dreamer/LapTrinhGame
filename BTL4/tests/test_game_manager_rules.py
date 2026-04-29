@@ -1,6 +1,14 @@
 import unittest
 
-from scripts.cards import ACTION_DRAW_TWO, ACTION_REVERSE, ACTION_SKIP, ACTION_WILD_DRAW_FOUR, Card
+from scripts.cards import (
+    ACTION_DRAW_TWO,
+    ACTION_REVERSE,
+    ACTION_SKIP,
+    ACTION_WILD,
+    ACTION_WILD_DRAW_FOUR,
+    Card,
+    sort_hand_cards,
+)
 from scripts.game_manager import (
     GameSettings,
     PlayerAction,
@@ -174,6 +182,57 @@ class UnoRuleSettingsTest(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.message, "Illegal card for current top card/color.")
         self.assertEqual(game.pending_draw_penalty_count, 4)
+
+    def test_sort_hand_cards_groups_wilds_and_orders_colors(self) -> None:
+        hand = [
+            Card(color="green", kind=ACTION_SKIP),
+            Card(color=None, kind=ACTION_WILD),
+            number("blue", 9),
+            number("red", 2),
+            Card(color="yellow", kind=ACTION_REVERSE),
+            number("yellow", 4),
+            Card(color=None, kind=ACTION_WILD_DRAW_FOUR),
+            number("blue", 1),
+        ]
+
+        sort_hand_cards(hand)
+
+        self.assertEqual(
+            [card.kind for card in hand[:2]],
+            [ACTION_WILD, ACTION_WILD_DRAW_FOUR],
+        )
+        self.assertEqual(
+            [(card.color, card.kind, card.number) for card in hand[2:]],
+            [
+                ("red", "number", 2),
+                ("yellow", "number", 4),
+                ("yellow", ACTION_REVERSE, None),
+                ("blue", "number", 1),
+                ("blue", "number", 9),
+                ("green", ACTION_SKIP, None),
+            ],
+        )
+
+    def test_sort_hand_action_sorts_current_players_hand_without_advancing_turn(self) -> None:
+        game = self.make_game(GameSettings(num_players=2))
+        game.player_hands = [
+            [
+                number("blue", 9),
+                Card(color=None, kind=ACTION_WILD_DRAW_FOUR),
+                number("red", 1),
+            ],
+            [number("yellow", 3)],
+        ]
+
+        result = game.submit_action(PlayerAction(player_id=0, action_type="sort_hand"))
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.message, "Hand sorted.")
+        self.assertEqual(game.current_player, 0)
+        self.assertEqual(
+            [card.kind for card in game.player_hands[0]],
+            [ACTION_WILD_DRAW_FOUR, "number", "number"],
+        )
 
 
 if __name__ == "__main__":

@@ -3,11 +3,24 @@ from typing import Optional
 
 COLORS = ["red", "yellow", "green", "blue"]
 
+HAND_COLOR_ORDER = {
+    "red": 0,
+    "yellow": 1,
+    "blue": 2,
+    "green": 3,
+}
+
 ACTION_SKIP = "skip"
 ACTION_REVERSE = "reverse"
 ACTION_DRAW_TWO = "draw2"
 ACTION_WILD = "wild"
 ACTION_WILD_DRAW_FOUR = "wild_draw4"
+
+ACTION_ORDER = {
+    ACTION_SKIP: 0,
+    ACTION_REVERSE: 1,
+    ACTION_DRAW_TWO: 2,
+}
 
 
 @dataclass
@@ -40,3 +53,21 @@ class Card:
         if self.kind == ACTION_WILD:
             return "WILD"
         return "+4"
+
+
+def sort_hand_cards(cards: list[Card]) -> None:
+    """Sort a hand so wild cards stay left and colors are grouped consistently."""
+
+    def sort_key(card: Card) -> tuple[int, int, int, int, int]:
+        if card.is_wild:
+            return (0, 0, 0, 0, 0)
+
+        color_rank = HAND_COLOR_ORDER.get(card.color or "", len(HAND_COLOR_ORDER))
+        if card.kind == "number":
+            number_rank = card.number if card.number is not None else 99
+            return (1, color_rank, 0, number_rank, 0)
+
+        action_rank = ACTION_ORDER.get(card.kind, len(ACTION_ORDER))
+        return (1, color_rank, 1, 0, action_rank)
+
+    cards.sort(key=sort_key)

@@ -10,6 +10,7 @@ from scripts.cards import (
     ACTION_WILD_DRAW_FOUR,
     COLORS,
     Card,
+    sort_hand_cards,
 )
 from scripts.deck import build_standard_uno_deck
 
@@ -115,6 +116,9 @@ class UnoGameManager:
         for _ in range(self.settings.initial_cards):
             for player in range(self.num_players):
                 self.player_hands[player].append(self.draw_from_pile())
+
+        for hand in self.player_hands:
+            sort_hand_cards(hand)
 
         while True:
             card = self.draw_from_pile()
@@ -231,6 +235,9 @@ class UnoGameManager:
         if action.action_type == "uno":
             return self.call_uno(action.player_id)
 
+        if action.action_type == "sort_hand":
+            return self.sort_player_hand(action.player_id)
+
         if action.player_id != self.current_player:
             return ActionResult(False, "Not this player's turn.")
 
@@ -342,6 +349,7 @@ class UnoGameManager:
 
         penalty_cards = [self.draw_from_pile() for _ in range(2)]
         self.player_hands[player_id].extend(penalty_cards)
+        sort_hand_cards(self.player_hands[player_id])
         self.uno_called_players.discard(player_id)
         result.message = f"UNO was not called. Player {player_id + 1} drew 2 cards."
         result.uno_caught_player = player_id
@@ -375,6 +383,7 @@ class UnoGameManager:
             return ActionResult(True, "Choose whether to play or keep the drawn card.", drew_card=drawn)
 
         self.player_hands[player_id].append(drawn)
+        sort_hand_cards(self.player_hands[player_id])
         self._advance_turn(1)
         self.is_animating = True
         self._sync_uno_calls()
@@ -390,6 +399,7 @@ class UnoGameManager:
         self.pending_draw_decision_player = None
         self.pending_draw_decision_card = None
         self.player_hands[player_id].append(card)
+        sort_hand_cards(self.player_hands[player_id])
         self._advance_turn(1)
         self.is_animating = True
         self._sync_uno_calls()
@@ -450,6 +460,15 @@ class UnoGameManager:
         self._advance_turn(1)
         self._sync_uno_calls()
         return ActionResult(True, "Drew one card and ended turn.", drew_card=drawn)
+
+    def sort_player_hand(self, player_id: int) -> ActionResult:
+        if self.winner is not None:
+            return ActionResult(False, "Game is already over.")
+        if player_id != self.current_player:
+            return ActionResult(False, "Not this player's turn.")
+
+        sort_hand_cards(self.player_hands[player_id])
+        return ActionResult(True, "Hand sorted.")
 
     def _apply_played_card_effect(self, card: Card) -> None:
         if card.kind == ACTION_SKIP:
@@ -553,6 +572,7 @@ class UnoGameManager:
         for target in punish_targets:
             for _ in range(2):
                 self.player_hands[target].append(self.draw_from_pile())
+            sort_hand_cards(self.player_hands[target])
         self._sync_uno_calls()
 
         self.pending_effect = None
