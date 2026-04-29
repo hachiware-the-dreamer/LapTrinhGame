@@ -149,6 +149,14 @@ class ScreenResult:
 
 
 @dataclass
+class MultiplayerHostSetup:
+    player_name: str
+    room_name: str
+    password: str
+    capacity: int
+
+
+@dataclass
 class HandTransferAnimation:
     choice_action: PlayerAction
     phase: int
@@ -410,16 +418,18 @@ class MultiplayerScreen(BaseScreen):
         body_font: pygame.font.Font,
         small_font: pygame.font.Font,
     ) -> None:
-        header = section_font.render("Create Room", True, (238, 242, 246))
+        header_font = theme_font(screen.get_width(), screen.get_height(), 40, bold=True)
+        header = header_font.render("Create Room", True, (238, 242, 246))
         screen.blit(header, header.get_rect(midtop=(panel.centerx, panel.y + 26)))
 
-        room_name_rect = pygame.Rect(panel.centerx - 290, panel.y + 130, 580, 58)
-        room_pwd_rect = pygame.Rect(panel.centerx - 290, panel.y + 214, 580, 58)
+        room_name_rect = pygame.Rect(panel.centerx - 310, panel.y + 136, 620, 64)
+        room_pwd_rect = pygame.Rect(panel.centerx - 310, panel.y + 224, 620, 64)
         self._draw_input_box(
             screen,
             room_name_rect,
             f"Room Name: {self.create_room_name}",
             self.focus_field == "create_room_name",
+            font_size=30,
         )
         create_pwd_text = "*" * len(self.create_password) if self.create_password else "(none)"
         self._draw_input_box(
@@ -427,16 +437,8 @@ class MultiplayerScreen(BaseScreen):
             room_pwd_rect,
             f"Password: {create_pwd_text}",
             self.focus_field == "create_password",
+            font_size=30,
         )
-
-        cap_label = body_font.render("Capacity:", True, (233, 239, 244))
-        screen.blit(cap_label, cap_label.get_rect(midleft=(panel.centerx - 288, panel.y + 325)))
-        cap_rects = self._capacity_button_rects(panel)
-        for value, rect in cap_rects.items():
-            selected = value == self.create_capacity
-            fill = SETTINGS_ACTIVE_FILL if selected else SETTINGS_IDLE_FILL
-            border = SETTINGS_ACTIVE_BORDER if selected else SETTINGS_IDLE_BORDER
-            draw_theme_button(screen, rect, str(value), fill, border, selected=selected)
 
         buttons = self._create_button_rects(panel)
         draw_theme_button(
@@ -445,6 +447,7 @@ class MultiplayerScreen(BaseScreen):
             "Host Room",
             SETTINGS_ACTIVE_FILL,
             SETTINGS_ACTIVE_BORDER,
+            font_size=30,
         )
         draw_theme_button(
             screen,
@@ -452,9 +455,8 @@ class MultiplayerScreen(BaseScreen):
             "Cancel",
             SETTINGS_DANGER_FILL,
             SETTINGS_DANGER_BORDER,
+            font_size=30,
         )
-        help_text = small_font.render("Capacity must be 2 or 4 players.", True, (188, 200, 212))
-        screen.blit(help_text, help_text.get_rect(midtop=(panel.centerx, panel.y + 406)))
         msg = small_font.render(self.message, True, (234, 213, 145))
         screen.blit(msg, msg.get_rect(midbottom=(panel.centerx, panel.bottom - 16)))
 
@@ -688,36 +690,20 @@ class MultiplayerScreen(BaseScreen):
             self.message = "Room creation canceled."
             return None
         if buttons["confirm"].collidepoint(mouse_pos):
-            self._create_host_room()
-            return None
-        return None
-
-    def _create_host_room(self) -> None:
-        room_name = self.create_room_name.strip() or "UNO Room"
-        host_name = self.player_name.strip() or "Host"
-
-        self._leave_room(keep_message=True)
-        try:
-            self.host = MultiplayerHost(
-                host_name=host_name,
-                room_name=room_name,
+            host_setup = MultiplayerHostSetup(
+                player_name=self.player_name.strip() or "Host",
+                room_name=self.create_room_name.strip() or "UNO Room",
                 password=self.create_password,
                 capacity=self.create_capacity,
             )
-        except OSError as exc:
-            self.host = None
-            self.message = f"Could not host room: {exc}"
-            return
-        except ValueError as exc:
-            self.host = None
-            self.message = str(exc)
-            return
-
-        self.mode = self.MODE_ROOM
-        self.is_host = True
-        self.room_state = self.host.room_state
-        room_id = str(self.room_state.get("room_id", "------"))
-        self.message = f"Room created. Share code: {room_id}"
+            settings_screen = GameSettingsScreen(
+                self.atlas,
+                self.audio_settings,
+                multiplayer_host_setup=host_setup,
+            )
+            settings_screen.message = "Configure the match, then start hosting."
+            return ScreenResult(next_screen=settings_screen)
+        return None
 
     def _handle_room_click(
         self,
@@ -862,10 +848,25 @@ class MultiplayerScreen(BaseScreen):
         return {"start": start_rect, "leave": leave_rect}
 
     @staticmethod
-    def _draw_input_box(screen: pygame.Surface, rect: pygame.Rect, text: str, focused: bool) -> None:
+    def _draw_input_box(
+        screen: pygame.Surface,
+        rect: pygame.Rect,
+        text: str,
+        focused: bool,
+        font_size: int = 26,
+    ) -> None:
         fill = (42, 52, 66) if not focused else (55, 76, 92)
         border = SETTINGS_ACTIVE_BORDER if focused else SETTINGS_IDLE_BORDER
-        draw_theme_button(screen, rect, text, fill, border, text_color=(236, 241, 246), selected=focused)
+        draw_theme_button(
+            screen,
+            rect,
+            text,
+            fill,
+            border,
+            text_color=(236, 241, 246),
+            selected=focused,
+            font_size=font_size,
+        )
 
 
 class EndScreen(BaseScreen):
@@ -904,10 +905,19 @@ class GameSettingsScreen(BaseScreen):
     """Screen for configuring game settings before starting."""
     state_name = "settings"
 
-    def __init__(self, atlas: CardSpriteAtlas, audio_settings: AudioSettings) -> None:
+    def __init__(
+        self,
+        atlas: CardSpriteAtlas,
+        audio_settings: AudioSettings,
+        multiplayer_host_setup: Optional[MultiplayerHostSetup] = None,
+    ) -> None:
         self.atlas = atlas
         self.audio_settings = audio_settings
         self.settings = GameSettings()
+        self.multiplayer_host_setup = multiplayer_host_setup
+        if self.multiplayer_host_setup is not None:
+            self.settings.num_players = self.multiplayer_host_setup.capacity
+        self.message = ""
         self.dragging_initial_cards = False
         self.dragging_rule_8_timer = False
 
@@ -934,8 +944,8 @@ class GameSettingsScreen(BaseScreen):
         total_width = button_w * 2 + spacing
         left_x = screen_rect.centerx - total_width // 2
         return {
-            "back": pygame.Rect(left_x, y, button_w, button_h),
-            "start_game": pygame.Rect(left_x + button_w + spacing, y, button_w, button_h),
+            "start_game": pygame.Rect(left_x, y, button_w, button_h),
+            "back": pygame.Rect(left_x + button_w + spacing, y, button_w, button_h),
         }
 
     @staticmethod
@@ -943,12 +953,10 @@ class GameSettingsScreen(BaseScreen):
         start_y = max(150, int(screen_rect.height * 0.19))
         button_w = 86
         button_h = 70
-        spacing = 60
         center_x = screen_rect.centerx
         return {
-            2: pygame.Rect(center_x - button_w - spacing, start_y, button_w, button_h),
-            3: pygame.Rect(center_x - button_w // 2, start_y, button_w, button_h),
-            4: pygame.Rect(center_x + spacing, start_y, button_w, button_h),
+            2: pygame.Rect(center_x - button_w - 32, start_y, button_w, button_h),
+            4: pygame.Rect(center_x + 32, start_y, button_w, button_h),
         }
 
     @staticmethod
@@ -1046,11 +1054,43 @@ class GameSettingsScreen(BaseScreen):
                 # Back button
                 back_rect = self._get_bottom_button_rects(screen.get_rect())["back"]
                 if back_rect.collidepoint(mouse_pos):
+                    if self.multiplayer_host_setup is not None:
+                        lobby_screen = MultiplayerScreen(self.atlas, self.audio_settings)
+                        lobby_screen.mode = MultiplayerScreen.MODE_CREATE
+                        lobby_screen.player_name = self.multiplayer_host_setup.player_name
+                        lobby_screen.create_room_name = self.multiplayer_host_setup.room_name
+                        lobby_screen.create_password = self.multiplayer_host_setup.password
+                        lobby_screen.create_capacity = self.multiplayer_host_setup.capacity
+                        lobby_screen.message = "Choose room parameters and host."
+                        return ScreenResult(next_screen=lobby_screen)
                     return ScreenResult(next_screen=TitleScreen(self.atlas, self.audio_settings))
                 
                 # Start game button
                 start_rect = self._get_bottom_button_rects(screen.get_rect())["start_game"]
                 if start_rect.collidepoint(mouse_pos):
+                    if self.multiplayer_host_setup is not None:
+                        try:
+                            host = MultiplayerHost(
+                                host_name=self.multiplayer_host_setup.player_name,
+                                room_name=self.multiplayer_host_setup.room_name,
+                                password=self.multiplayer_host_setup.password,
+                                capacity=self.settings.num_players,
+                            )
+                        except OSError as exc:
+                            self.message = f"Could not host room: {exc}"
+                            return ScreenResult()
+                        except ValueError as exc:
+                            self.message = str(exc)
+                            return ScreenResult()
+
+                        multiplayer_screen = MultiplayerScreen(self.atlas, self.audio_settings)
+                        multiplayer_screen.mode = MultiplayerScreen.MODE_ROOM
+                        multiplayer_screen.is_host = True
+                        multiplayer_screen.host = host
+                        multiplayer_screen.room_state = host.room_state
+                        multiplayer_screen.message = f"Room created. Share code: {host.room_id}"
+                        return ScreenResult(next_screen=multiplayer_screen)
+
                     game = UnoGameManager(settings=self.settings)
                     return ScreenResult(
                         next_screen=PlayingScreen(
@@ -1090,11 +1130,9 @@ class GameSettingsScreen(BaseScreen):
         font_section = theme_font(screen_rect.width, screen_rect.height, 34, bold=True)
         font_label = theme_font(screen_rect.width, screen_rect.height, 28)
 
-        panel_top = max(92, int(screen_rect.height * 0.13))
-        panel_bottom = screen_rect.height - 36
-        panel_rect = pygame.Rect(0, panel_top, min(1020, screen_rect.width - 96), panel_bottom - panel_top)
-        panel_rect.centerx = screen_rect.centerx
-        draw_theme_panel(screen, panel_rect, alpha=142)
+        panel_rect = pygame.Rect(0, 0, min(1180, screen_rect.width - 96), screen_rect.height - 170)
+        panel_rect.center = (screen_rect.centerx, screen_rect.centery + 38)
+        draw_theme_panel(screen, panel_rect, alpha=146)
 
         title = font_title.render("GAME SETTINGS", True, (255, 255, 255))
         screen.blit(title, title.get_rect(midtop=(screen_rect.centerx, max(18, int(screen_rect.height * 0.032)))))
@@ -1142,7 +1180,7 @@ class GameSettingsScreen(BaseScreen):
                 screen_rect,
                 show_rule_8_timer=self.settings.rule_8_enabled,
             )
-            label = font_section.render("2-Player Reverse:", True, (255, 255, 255))
+            label = font_section.render("2-Player Reverse Rule:", True, (255, 255, 255))
             screen.blit(label, (section_x, behavior_rects["skip"].y - 54))
             for behavior, rect in behavior_rects.items():
                 selected = behavior == self.settings.two_player_reverse_behavior
@@ -1153,6 +1191,10 @@ class GameSettingsScreen(BaseScreen):
         button_rects = self._get_bottom_button_rects(screen_rect)
         self._draw_button(screen, button_rects["back"], "BACK", SETTINGS_DANGER_FILL, SETTINGS_DANGER_BORDER)
         self._draw_button(screen, button_rects["start_game"], "START GAME", SETTINGS_ACTIVE_FILL, SETTINGS_ACTIVE_BORDER)
+        if self.message:
+            footer = font_label.render(self.message, True, (234, 213, 145))
+            footer_y = button_rects["back"].top - 18
+            screen.blit(footer, footer.get_rect(midbottom=(screen_rect.centerx, footer_y)))
 
 
 class MainSettingsScreen(BaseScreen):

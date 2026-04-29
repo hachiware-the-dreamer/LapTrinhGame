@@ -662,8 +662,6 @@ def _menu_background(width: int, height: int) -> pygame.Surface:
     top_band.fill((18, 30, 44, 86))
     surface.blit(top_band, (0, 0))
 
-    pygame.draw.line(surface, (38, 58, 74), (0, 36), (width, 36), width=1)
-
     vignette = _vignette_overlay(width, height)
     surface.blit(vignette, (0, 0))
     return surface
@@ -690,6 +688,7 @@ def draw_theme_button(
     border: tuple[int, int, int] | None = None,
     text_color: tuple[int, int, int] | None = None,
     selected: bool = False,
+    font_size: int = 26,
 ) -> None:
     border = border or LIGHT_BORDER
     shadow = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
@@ -700,7 +699,7 @@ def draw_theme_button(
     pygame.draw.rect(screen, tuple(min(255, c + 22) for c in fill), rect.inflate(-6, -6), width=2, border_radius=9)
     pygame.draw.rect(screen, border, rect, width=3 if selected else 2, border_radius=12)
 
-    font = _scaled_font(screen.get_width(), screen.get_height(), 26, bold=True)
+    font = _scaled_font(screen.get_width(), screen.get_height(), font_size, bold=True)
     rendered = _render_fit_text(font, label, text_color or _text_color_for_fill(fill), rect.width - 26)
     screen.blit(rendered, rendered.get_rect(center=rect.center))
 
