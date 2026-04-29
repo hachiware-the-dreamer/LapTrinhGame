@@ -1,8 +1,5 @@
 # UNO tay` Tasks
 
- 
-
-
 ## Task 5:
 - them asset hoac sua gameplay cho dep hon
 
@@ -23,3 +20,47 @@
 - [x] **Sync Card Plays:** Synchronize the action of a card being played, ensuring the visual animation translates correctly for each player's local directional perspective.
 - [x] **Sync Card Draws:** Broadcast when a player draws a card so all clients update that opponent's visible card count.
 - [x] **Sync Custom Rules:** Broadcast the exact state changes for the Rule of 0 (directional hand shift) and Rule of 7 (target hand swap) so the visual clump-and-distribute animations trigger for everyone at the same time.
+
+## Task 9: Multiplayer Visuals - Read Server Events
+*Note: Animations must be decoupled from local mouse clicks and instead driven by the `event` dict inside the `match_sync` payloads returned by `MultiplayerClient.poll_messages()`.*
+
+- [ ] **Relative Player Mapping:** The `match_sync` payload contains `seat_names` and `game["current_player"]`. Map the server's `actor_id` to the local client's screen anchors (Local Client = Bottom, Next = Left, etc.) based on their seat index relative to the local player's seat.
+- [ ] **Play/Draw Animations via Events:** - Loop through messages from `client.poll_messages()`. If the message `type` is `"match_sync"` and an `event` exists:
+  - If `event["action"] == "play"`, animate the `event["played_card"]` flying from the mapped `actor_id`'s anchor to the center discard pile.
+  - If `event["action"] == "draw"`, animate a card flying from the center draw pile to the mapped `actor_id`'s anchor.
+- [ ] **Custom Rule Animations via Events:**
+  - If `event["action"] == "rule_0"` or `event["action"] == "rule_7"`, trigger Phase 1 (The Clump) of the hand-swapping animation.
+  - Wait for the *next* `match_sync` packet containing the updated `game["player_hands"]` before triggering Phase 2 (distributing the cards to their new anchors).
+- [ ] **Sync Directional Arrows:** Tie the rotation of the center play arrows directly to `game["turn_direction"]` from the `match_sync` payload, so it instantly reverses for all clients when the server updates the state.
+
+## Task 10: Server-Side AI Pacing & Local Debounce
+*Note: The server currently computes AI turns instantly via a `while` loop in `_auto_resolve_ai_pending`, which breaks client animations. We must implement a timestamp-based cooldown.*
+
+- [ ] **Modify `HostAuthoritativeMatch` Initialization:**
+  - Open `multiplayer.py`.
+  - In `HostAuthoritativeMatch.__init__`, add a new variable to track the cooldown: `self.next_ai_action_time_ms = 0`.
+- [ ] **Refactor `_auto_resolve_ai_pending`:**
+  - Remove the `while safety > 0 and self.game.winner is None:` loop. The method should only process *one* AI action per call.
+  - Add a check at the top of the method: `if now_ms < self.next_ai_action_time_ms: return []`.
+  - At the end of the method, right before returning the `events` list, set the cooldown for the next AI turn: `self.next_ai_action_time_ms = now_ms + 1500` (adds a 1.5-second delay).
+- [ ] **Restore Local Input Debounce:** - In the Pygame frontend, re-implement the local `is_animating` flag.
+  - While `is_animating == True`, ignore all local mouse clicks to prevent the player from sending a `"submit_action"` payload to the server while the client is still rendering a previous `match_sync` event.
+
+## Task 11: Polish UNO Call Mechanics & Visual Effects
+*Note: The UNO button logic needs refinement to prevent false activations, and we need to add the specific Vietnamese text popups and screen flashes.*
+
+- [ ] **Smart UNO Button Activation:**
+  - Update the local UI logic: The "UNO" button should *only* light up and become interactable if the local player's hand size is exactly 2 AND at least one of those 2 cards is a legal play (matches current color, number, action, or is a Wild).
+  - Ensure the button remains dimmed/disabled if the player has 2 cards but no legal moves (meaning their only option is to draw).
+- [ ] **Success Visuals ("tao tay` roi"):**
+  - Create a visual event that triggers when a player successfully calls UNO.
+  - Draw a screen-wide, semi-transparent green overlay (e.g., using `pygame.Surface` with alpha) that flashes and quickly fades out.
+  - Render large, bold text in the exact center of the screen that says: **"tao tay` roi"**.
+- [ ] **Catch/Penalty Visuals ("chua tay` dau"):**
+  - Create a visual event that triggers when a player is caught failing to call UNO and receives the +2 penalty.
+  - Draw a screen-wide, semi-transparent red flash overlay that quickly fades out.
+  - Render large, bold text in the exact center of the screen that says: **"chua tay` dau"**.
+- [ ] **Multiplayer Sync for Visuals:**
+  - Hook these new visual effects into the multiplayer event listener (Task 9). 
+  - When `client.poll_messages()` receives an `event["action"] == "uno"`, trigger the green flash. 
+  - If you implement a "caught" event, trigger the red flash globally so everyone in the lobby sees the text and flash when someone gets penalized.
