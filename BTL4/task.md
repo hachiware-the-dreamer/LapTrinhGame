@@ -24,27 +24,35 @@
 ## Task 9: Multiplayer Visuals - Read Server Events
 *Note: Animations must be decoupled from local mouse clicks and instead driven by the `event` dict inside the `match_sync` payloads returned by `MultiplayerClient.poll_messages()`.*
 
-- [ ] **Relative Player Mapping:** The `match_sync` payload contains `seat_names` and `game["current_player"]`. Map the server's `actor_id` to the local client's screen anchors (Local Client = Bottom, Next = Left, etc.) based on their seat index relative to the local player's seat.
-- [ ] **Play/Draw Animations via Events:** - Loop through messages from `client.poll_messages()`. If the message `type` is `"match_sync"` and an `event` exists:
+- [x] **Relative Player Mapping:** The `match_sync` payload contains `seat_names` and `game["current_player"]`. Map the server's `actor_id` to the local client's screen anchors (Local Client = Bottom, Next = Left, etc.) based on their seat index relative to the local player's seat.
+- [x] **Play/Draw Animations via Events:** - Loop through messages from `client.poll_messages()`. If the message `type` is `"match_sync"` and an `event` exists:
   - If `event["action"] == "play"`, animate the `event["played_card"]` flying from the mapped `actor_id`'s anchor to the center discard pile.
   - If `event["action"] == "draw"`, animate a card flying from the center draw pile to the mapped `actor_id`'s anchor.
-- [ ] **Custom Rule Animations via Events:**
+- [x] **Custom Rule Animations via Events:**
   - If `event["action"] == "rule_0"` or `event["action"] == "rule_7"`, trigger Phase 1 (The Clump) of the hand-swapping animation.
   - Wait for the *next* `match_sync` packet containing the updated `game["player_hands"]` before triggering Phase 2 (distributing the cards to their new anchors).
-- [ ] **Sync Directional Arrows:** Tie the rotation of the center play arrows directly to `game["turn_direction"]` from the `match_sync` payload, so it instantly reverses for all clients when the server updates the state.
+- [x] **Sync Directional Arrows:** Tie the rotation of the center play arrows directly to `game["turn_direction"]` from the `match_sync` payload, so it instantly reverses for all clients when the server updates the state.
 
 ## Task 10: Server-Side AI Pacing & Local Debounce
 *Note: The server currently computes AI turns instantly via a `while` loop in `_auto_resolve_ai_pending`, which breaks client animations. We must implement a timestamp-based cooldown.*
 
-- [ ] **Modify `HostAuthoritativeMatch` Initialization:**
+- [x] **Modify `HostAuthoritativeMatch` Initialization:**
   - Open `multiplayer.py`.
   - In `HostAuthoritativeMatch.__init__`, add a new variable to track the cooldown: `self.next_ai_action_time_ms = 0`.
-- [ ] **Refactor `_auto_resolve_ai_pending`:**
+- [x] **Refactor `_auto_resolve_ai_pending`:**
   - Remove the `while safety > 0 and self.game.winner is None:` loop. The method should only process *one* AI action per call.
   - Add a check at the top of the method: `if now_ms < self.next_ai_action_time_ms: return []`.
   - At the end of the method, right before returning the `events` list, set the cooldown for the next AI turn: `self.next_ai_action_time_ms = now_ms + 1500` (adds a 1.5-second delay).
-- [ ] **Restore Local Input Debounce:** - In the Pygame frontend, re-implement the local `is_animating` flag.
+- [x] **Restore Local Input Debounce:** - In the Pygame frontend, re-implement the local `is_animating` flag.
   - While `is_animating == True`, ignore all local mouse clicks to prevent the player from sending a `"submit_action"` payload to the server while the client is still rendering a previous `match_sync` event.
+
+### Implementation Notes (Task 9/10)
+- Hand-transfer choices in multiplayer (`choose_zero_direction` / `choose_seven_target`) were decoupled from local click animations: local click now only submits to host, and visuals are driven by `match_sync.event`.
+- Rule 0/7 now runs as two-phase remote animation: clump on `event["action"] in {"rule_0","rule_7"}`, then distribute only after a later `match_sync` arrives with changed `player_hands`.
+- Added server-side AI pacing regression tests (`tests/test_multiplayer_security.py`) to ensure one AI action per call and cooldown gating.
+- Timing consistency fix: multiplayer host-submitted actions now use host wall-clock milliseconds, preventing mixed timestamp domains from prematurely resolving timed effects.
+- Crash fix: normalized card-signature sorting for hand-swap sync detection so mixed `None`/string fields no longer raise `TypeError` during Rule 7 swaps.
+- Freeze fix: Rule 7 client no longer waits forever for a second sync packet; if the resolving packet already contains post-swap state, that snapshot is queued immediately for phase-2 distribution.
 
 ## Task 11: Polish UNO Call Mechanics & Visual Effects
 *Note: The UNO button logic needs refinement to prevent false activations, and we need to add the specific Vietnamese text popups and screen flashes.*

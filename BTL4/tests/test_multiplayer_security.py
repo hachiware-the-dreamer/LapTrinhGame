@@ -2,6 +2,7 @@ import socket
 import time
 import unittest
 
+from scripts.cards import ACTION_SKIP, Card
 from scripts.multiplayer import HostActionResult, MultiplayerHost
 
 
@@ -76,6 +77,74 @@ class MultiplayerSecurityTest(unittest.TestCase):
         self.assertEqual(response, {"type": "action_ack", "ok": True, "message": "captured"})
         self.assertEqual(len(captured_now_ms), 1)
         self.assertGreaterEqual(captured_now_ms[0], before_ms)
+
+
+class HostAIPacingTest(unittest.TestCase):
+    def make_host(self, capacity: int = 2) -> MultiplayerHost:
+        return MultiplayerHost(
+            host_name="Host",
+            room_name="AI Pacing Test",
+            password="",
+            capacity=capacity,
+            host_address="127.0.0.1",
+        )
+
+    def test_auto_resolve_processes_only_one_ai_action_per_call(self) -> None:
+        host = self.make_host(capacity=2)
+        try:
+            ok, _, _ = host.start_match()
+            self.assertTrue(ok)
+            match = host._state.match
+            self.assertIsNotNone(match)
+            assert match is not None
+
+            match.game.current_player = 1
+            match.game.pending_effect = None
+            match.game.pending_effect_player = None
+            match.game.pending_draw_decision_card = None
+            match.game.pending_draw_decision_player = None
+            match.game.pending_draw_penalty_count = 0
+            match.game.pending_draw_penalty_kind = None
+            match.game.current_color = "red"
+            match.game.discard_pile = [Card(color="red", kind="number", number=3)]
+            match.game.player_hands[1] = [
+                Card(color="red", kind=ACTION_SKIP),
+                Card(color="green", kind="number", number=5),
+            ]
+            match.game.player_hands[0] = [Card(color="yellow", kind="number", number=1)]
+
+            now_ms = int(time.time() * 1000)
+            events = match._auto_resolve_ai_pending(now_ms)
+
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0].get("actor_id"), 1)
+            self.assertEqual(match.next_ai_action_time_ms, now_ms + 1500)
+            self.assertEqual(match.game.current_player, 1)
+        finally:
+            host.close()
+
+    def test_auto_resolve_respects_ai_cooldown_gate(self) -> None:
+        host = self.make_host(capacity=2)
+        try:
+            ok, _, _ = host.start_match()
+            self.assertTrue(ok)
+            match = host._state.match
+            self.assertIsNotNone(match)
+            assert match is not None
+
+            match.game.current_player = 1
+            match.next_ai_action_time_ms = 10_000
+            match.game.pending_effect = None
+            match.game.pending_draw_decision_card = None
+            match.game.current_color = "red"
+            match.game.discard_pile = [Card(color="red", kind="number", number=9)]
+            match.game.player_hands[1] = [Card(color="red", kind=ACTION_SKIP)]
+
+            events = match._auto_resolve_ai_pending(9_500)
+            self.assertEqual(events, [])
+            self.assertEqual(match.game.current_player, 1)
+        finally:
+            host.close()
 
 
 if __name__ == "__main__":

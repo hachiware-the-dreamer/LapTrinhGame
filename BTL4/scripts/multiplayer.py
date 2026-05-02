@@ -133,6 +133,7 @@ class HostAuthoritativeMatch:
         self.ai_names: dict[int, str] = {
             seat: f"AI {seat - len(self.human_tokens) + 1}" for seat in sorted(self.ai_seats)
         }
+        self.next_ai_action_time_ms = 0
 
     @property
     def ai_count(self) -> int:
@@ -214,71 +215,63 @@ class HostAuthoritativeMatch:
 
     def _auto_resolve_ai_pending(self, now_ms: int) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
-        safety = 24
-        while safety > 0 and self.game.winner is None:
-            safety -= 1
-            current = self.game.current_player
-            if current not in self.ai_seats:
-                break
+        if self.game.winner is not None:
+            return events
+        if now_ms < self.next_ai_action_time_ms:
+            return events
 
-            if self.game.pending_effect == RULE_ZERO_DIRECTION:
-                choice_payload = {
-                    "action_type": "choose_zero_direction",
-                    "chosen_direction": random.choice([1, -1]),
+        current = self.game.current_player
+        if current not in self.ai_seats:
+            return events
+
+        if self.game.pending_effect == RULE_ZERO_DIRECTION:
+            choice_payload = {
+                "action_type": "choose_zero_direction",
+                "chosen_direction": random.choice([1, -1]),
+                "timestamp_ms": now_ms,
+            }
+            result = self._apply_action_payload(current, choice_payload, now_ms)
+            events.append(self._event_from_action(current, choice_payload, result))
+        elif self.game.pending_effect == RULE_SEVEN_TARGET:
+            targets = [pid for pid in range(self.capacity) if pid != current]
+            if not targets:
+                return events
+            choice_payload = {
+                "action_type": "choose_seven_target",
+                "target_player_id": random.choice(targets),
+                "timestamp_ms": now_ms,
+            }
+            result = self._apply_action_payload(current, choice_payload, now_ms)
+            events.append(self._event_from_action(current, choice_payload, result))
+        elif self.game.pending_effect is not None:
+            return events
+        elif self.game.pending_draw_decision_card is not None:
+            card = self.game.pending_draw_decision_card
+            if card is None:
+                return events
+            if card.is_wild:
+                chosen_color = self.game.choose_color_for_player(current)
+                decision_payload = {
+                    "action_type": "play_drawn",
+                    "chosen_color": chosen_color,
                     "timestamp_ms": now_ms,
                 }
-                result = self._apply_action_payload(current, choice_payload, now_ms)
-                events.append(self._event_from_action(current, choice_payload, result))
-                if not result.ok:
-                    break
-                continue
-
-            if self.game.pending_effect == RULE_SEVEN_TARGET:
-                targets = [pid for pid in range(self.capacity) if pid != current]
-                if not targets:
-                    break
-                choice_payload = {
-                    "action_type": "choose_seven_target",
-                    "target_player_id": random.choice(targets),
+            elif self.game.is_legal_play(card):
+                decision_payload = {
+                    "action_type": "play_drawn",
                     "timestamp_ms": now_ms,
                 }
-                result = self._apply_action_payload(current, choice_payload, now_ms)
-                events.append(self._event_from_action(current, choice_payload, result))
-                if not result.ok:
-                    break
-                continue
-
-            if self.game.pending_effect is not None:
-                break
-            if self.game.pending_draw_decision_card is not None:
-                card = self.game.pending_draw_decision_card
-                if card is None:
-                    break
-                if card.is_wild:
-                    chosen_color = self.game.choose_color_for_player(current)
-                    decision_payload = {
-                        "action_type": "play_drawn",
-                        "chosen_color": chosen_color,
-                        "timestamp_ms": now_ms,
-                    }
-                elif self.game.is_legal_play(card):
-                    decision_payload = {
-                        "action_type": "play_drawn",
-                        "timestamp_ms": now_ms,
-                    }
-                else:
-                    decision_payload = {
-                        "action_type": "keep_drawn",
-                        "timestamp_ms": now_ms,
-                    }
-                result = self._apply_action_payload(current, decision_payload, now_ms)
-                events.append(self._event_from_action(current, decision_payload, result))
-                if not result.ok:
-                    break
-                continue
+            else:
+                decision_payload = {
+                    "action_type": "keep_drawn",
+                    "timestamp_ms": now_ms,
+                }
+            result = self._apply_action_payload(current, decision_payload, now_ms)
+            events.append(self._event_from_action(current, decision_payload, result))
+        else:
             outcome = perform_simple_ai_turn(self.game, now_ms=now_ms)
             if not outcome.result:
-                break
+                return events
             payload = {
                 "action_type": outcome.action_type,
                 "timestamp_ms": now_ms,
@@ -286,8 +279,9 @@ class HostAuthoritativeMatch:
             if outcome.result.played_card is not None and outcome.result.played_card.is_wild:
                 payload["chosen_color"] = outcome.result.played_card.chosen_color or self.game.current_color
             events.append(self._event_from_action(current, payload, outcome.result))
-            if not outcome.result.ok:
-                break
+
+        if events:
+            self.next_ai_action_time_ms = now_ms + 1500
         return events
 
     def validate_and_apply(self, player_token: str, payload: dict[str, Any], now_ms: int) -> HostActionResult:

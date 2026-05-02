@@ -1,5 +1,6 @@
 import random
 import os
+import time
 from dataclasses import dataclass
 from typing import Optional, Any
 
@@ -127,6 +128,18 @@ def _remap_game_payload_to_local_view(
 
 def _card_signature(card: Card) -> tuple[Optional[str], str, Optional[int], Optional[str]]:
     return (card.color, card.kind, card.number, card.chosen_color)
+
+
+def _card_signature_sort_key(
+    signature: tuple[Optional[str], str, Optional[int], Optional[str]],
+) -> tuple[str, str, int, str]:
+    color, kind, number, chosen_color = signature
+    return (
+        color or "",
+        kind,
+        number if number is not None else -1,
+        chosen_color or "",
+    )
 
 
 @dataclass
@@ -2539,6 +2552,9 @@ class MultiplayerPlayingScreen(PlayingScreen):
         )
         self._pending_network_message = ""
         self._action_in_flight = False
+        self._awaiting_hand_transfer_snapshot = False
+        self._queued_hand_transfer_payload: dict[str, Any] | None = None
+        self._hand_transfer_pre_signature: tuple[tuple[tuple[Optional[str], str, Optional[int], Optional[str]], ...], ...] | None = None
 
     def _handoff_to_room_screen(self, message: str) -> BaseScreen:
         next_screen = MultiplayerScreen(self.atlas, self.audio_settings)
@@ -2572,7 +2588,7 @@ class MultiplayerPlayingScreen(PlayingScreen):
                 self.local_canonical_player_id,
                 self._base_game.num_players,
             )
-        now_ms = int(pygame.time.get_ticks())
+        now_ms = int(time.time() * 1000)
         if self.is_host_player and self.host is not None:
             result = self.host.apply_host_action(mapped, now_ms=now_ms)
             if not result.ok:
@@ -2586,21 +2602,51 @@ class MultiplayerPlayingScreen(PlayingScreen):
             return ActionResult(False, "Action sent. Waiting for host...")
         return ActionResult(False, "Multiplayer link not available.")
 
-    def _sync_from_packet(self, packet: dict[str, Any]) -> None:
-        seq = int(packet.get("seq", 0) or 0)
-        if seq <= self._last_sync_seq:
-            return
-        game_payload = packet.get("game")
-        if not isinstance(game_payload, dict):
-            return
-        previous_game = self._base_game
-        remapped_payload = _remap_game_payload_to_local_view(game_payload, self.local_canonical_player_id)
+    def _hand_signature_from_game(
+        self,
+        game: UnoGameManager,
+    ) -> tuple[tuple[tuple[Optional[str], str, Optional[int], Optional[str]], ...], ...]:
+        return tuple(
+            tuple(sorted((_card_signature(card) for card in hand), key=_card_signature_sort_key))
+            for hand in game.player_hands
+        )
+
+    def _hand_signature_from_payload(
+        self,
+        payload: dict[str, Any],
+    ) -> tuple[tuple[tuple[Optional[str], str, Optional[int], Optional[str]], ...], ...]:
+        hands_payload = payload.get("player_hands", [])
+        if not isinstance(hands_payload, list):
+            return tuple()
+        result: list[tuple[tuple[Optional[str], str, Optional[int], Optional[str]], ...]] = []
+        for hand_payload in hands_payload:
+            if not isinstance(hand_payload, list):
+                result.append(tuple())
+                continue
+            hand_signature: list[tuple[Optional[str], str, Optional[int], Optional[str]]] = []
+            for card_payload in hand_payload:
+                if not isinstance(card_payload, dict):
+                    continue
+                hand_signature.append(
+                    (
+                        card_payload.get("color"),
+                        str(card_payload.get("kind", "")),
+                        card_payload.get("number"),
+                        card_payload.get("chosen_color"),
+                    )
+                )
+            result.append(tuple(sorted(hand_signature, key=_card_signature_sort_key)))
+        return tuple(result)
+
+    def _apply_network_snapshot(
+        self,
+        remapped_payload: dict[str, Any],
+        previous_game: UnoGameManager,
+    ) -> None:
         self._base_game = deserialize_game_state(remapped_payload)
         self._preserve_local_hand_visual_state(previous_game)
         self.game = _NetworkGameProxy(self._base_game, self._submit_network_action)  # type: ignore[assignment]
         self.display_top_card = self.game.top_discard
-        self._last_sync_seq = seq
-        self._action_in_flight = False
         self._prune_hidden_hand_cards()
         pending_draw_card = self.game.pending_draw_decision_card
         if self.game.pending_draw_decision_player == 0 and pending_draw_card is not None:
@@ -2608,7 +2654,175 @@ class MultiplayerPlayingScreen(PlayingScreen):
         else:
             self.pending_draw_decision_card = None
             self.pending_draw_decision_choosing_color = False
+
+    def _begin_remote_hand_transfer_phase1(self, event: dict[str, Any], previous_game: UnoGameManager) -> None:
+        action = str(event.get("action", "")).strip().lower()
+        actor_raw = event.get("actor_id")
+        try:
+            actor_canonical = int(actor_raw)
+        except (TypeError, ValueError):
+            return
+        actor_id = _canonical_to_view_player(
+            actor_canonical,
+            self.local_canonical_player_id,
+            previous_game.num_players,
+        )
+
+        if action == "rule_0":
+            direction = int(event.get("chosen_direction", PASS_CLOCKWISE))
+            if direction not in (PASS_CLOCKWISE, PASS_COUNTER_CLOCKWISE):
+                return
+            affected_players = list(range(previous_game.num_players))
+            choice_action = PlayerAction(
+                player_id=actor_id,
+                action_type="choose_zero_direction",
+                chosen_direction=direction,
+            )
+        elif action == "rule_7":
+            target_raw = event.get("target_player_id")
+            try:
+                target_canonical = int(target_raw)
+            except (TypeError, ValueError):
+                return
+            target_id = _canonical_to_view_player(
+                target_canonical,
+                self.local_canonical_player_id,
+                previous_game.num_players,
+            )
+            if target_id == actor_id:
+                return
+            affected_players = [actor_id, target_id]
+            choice_action = PlayerAction(
+                player_id=actor_id,
+                action_type="choose_seven_target",
+                target_player_id=target_id,
+            )
+        else:
+            return
+
+        if self.hand_transfer_animation is not None:
+            return
+
+        surface = pygame.display.get_surface()
+        screen_rect = surface.get_rect() if surface is not None else pygame.Rect(0, 0, 1920, 1080)
+        center = get_discard_pile_rect(screen_rect).center
+        center_point = (float(center[0]), float(center[1]))
+        cards: list[ActiveCard] = []
+        target_owner_by_card_id: dict[int, int] = {}
+
+        for source_player in affected_players:
+            source_hand = list(previous_game.player_hands[source_player])
+            source_rects = get_player_hand_card_rects(
+                screen_rect,
+                source_player,
+                previous_game.num_players,
+                len(source_hand),
+                source_hand,
+                use_current_positions=(source_player == 0),
+            )
+            for index, card in enumerate(source_hand):
+                if action == "rule_0":
+                    assert choice_action.chosen_direction is not None
+                    target_owner = (source_player + choice_action.chosen_direction) % previous_game.num_players
+                else:
+                    assert choice_action.target_player_id is not None
+                    target_owner = (
+                        choice_action.target_player_id
+                        if source_player == actor_id
+                        else actor_id
+                    )
+                target_owner_by_card_id[id(card)] = target_owner
+                self.hidden_hand_card_ids.add(id(card))
+
+                source_center = source_rects[index].center
+                source_rotation = get_player_card_rotation(source_player, previous_game.num_players)
+                cards.append(
+                    ActiveCard(
+                        card=card,
+                        owner_id=source_player,
+                        kind="transfer",
+                        current_pos=(float(source_center[0]), float(source_center[1])),
+                        target_pos=center_point,
+                        current_rotation=source_rotation,
+                        target_rotation=source_rotation,
+                        current_scale=1.0,
+                        target_scale=0.88,
+                    )
+                )
+
+        if not cards:
+            return
+
+        self.hand_transfer_animation = HandTransferAnimation(
+            choice_action=choice_action,
+            phase=1,
+            cards=cards,
+            target_owner_by_card_id=target_owner_by_card_id,
+        )
+        self.visual_state = HAND_TRANSFER_ANIMATION
+        self.game.is_animating = True
+        self._trigger_screen_shake()
+
+    def _sync_from_packet(self, packet: dict[str, Any]) -> None:
+        seq = int(packet.get("seq", 0) or 0)
+        if seq <= self._last_sync_seq:
+            return
+        game_payload = packet.get("game")
+        if not isinstance(game_payload, dict):
+            return
+        room_payload = packet.get("room")
+        if isinstance(room_payload, dict):
+            self.room_state = room_payload
+
+        previous_game = self._base_game
+        remapped_payload = _remap_game_payload_to_local_view(game_payload, self.local_canonical_player_id)
         event = packet.get("event")
+        action = ""
+        if isinstance(event, dict):
+            action = str(event.get("action", "")).strip().lower()
+
+        if self._awaiting_hand_transfer_snapshot:
+            pending_effect = remapped_payload.get("pending_effect")
+            if (
+                self._hand_transfer_pre_signature is not None
+                and self._hand_signature_from_payload(remapped_payload) != self._hand_transfer_pre_signature
+            ):
+                self._queued_hand_transfer_payload = remapped_payload
+            elif pending_effect not in (RULE_ZERO_DIRECTION, RULE_SEVEN_TARGET):
+                # Fallback: accept resolved state even if card multisets are unchanged after a swap.
+                self._queued_hand_transfer_payload = remapped_payload
+            self._last_sync_seq = seq
+            self._action_in_flight = False
+            if isinstance(event, dict):
+                message = str(event.get("message", "")).strip()
+                if message:
+                    self.last_message = message
+            return
+
+        if action in {"rule_0", "rule_7"}:
+            self._begin_remote_hand_transfer_phase1(event, previous_game)
+            if self.hand_transfer_animation is not None:
+                self._awaiting_hand_transfer_snapshot = True
+                self._hand_transfer_pre_signature = self._hand_signature_from_game(previous_game)
+                payload_signature = self._hand_signature_from_payload(remapped_payload)
+                if (
+                    self._hand_transfer_pre_signature is not None
+                    and payload_signature != self._hand_transfer_pre_signature
+                ):
+                    # Many host flows already include the post-swap state in the same rule event packet.
+                    self._queued_hand_transfer_payload = remapped_payload
+                else:
+                    self._queued_hand_transfer_payload = None
+                self._last_sync_seq = seq
+                self._action_in_flight = False
+                message = str(event.get("message", "")).strip()
+                if message:
+                    self.last_message = message
+                return
+
+        self._apply_network_snapshot(remapped_payload, previous_game)
+        self._last_sync_seq = seq
+        self._action_in_flight = False
         if isinstance(event, dict):
             self._spawn_remote_event_animation(event, previous_game)
             message = str(event.get("message", "")).strip()
@@ -2701,7 +2915,7 @@ class MultiplayerPlayingScreen(PlayingScreen):
             drew_card.chosen_color = str(chosen) if chosen is not None else None
 
         screen_rect = pygame.display.get_surface().get_rect() if pygame.display.get_surface() else pygame.Rect(0, 0, 1920, 1080)
-        if played_card is not None and action in {"play", "draw_play", "rule_0", "rule_7"}:
+        if played_card is not None and action in {"play", "draw_play"}:
             start_pos = get_player_anchor_point(screen_rect, actor_id, self._base_game.num_players)
             source_card = played_card
             start_rotation = get_player_card_rotation(actor_id, self._base_game.num_players)
@@ -2717,6 +2931,7 @@ class MultiplayerPlayingScreen(PlayingScreen):
             if action == "draw_play":
                 start_pos = get_draw_pile_rect(screen_rect.width, screen_rect.height).center
                 start_rotation = 0.0
+            self.game.is_animating = True
             self._spawn_active_card(
                 card=source_card,
                 owner_id=actor_id,
@@ -2736,6 +2951,7 @@ class MultiplayerPlayingScreen(PlayingScreen):
                     source_card = added_local_card
                     self.hidden_hand_card_ids.add(id(source_card))
                     reveal_hand_card = True
+            self.game.is_animating = True
             self._spawn_active_card(
                 card=source_card,
                 owner_id=actor_id,
@@ -2747,8 +2963,86 @@ class MultiplayerPlayingScreen(PlayingScreen):
                 reveal_hand_card=reveal_hand_card,
             )
             return
-        if action in {"rule_0", "rule_7"}:
-            self._trigger_screen_shake()
+
+    def _begin_hand_transfer_animation(self, choice_action: PlayerAction, screen: pygame.Surface, now_ms: int) -> None:
+        result = self.game.submit_action(choice_action)
+        self._record_player_action_result(result, now_ms)
+
+    def _update_hand_transfer_animation(self, screen: pygame.Surface, dt: float, now_ms: int) -> None:
+        animation = self.hand_transfer_animation
+        if animation is None:
+            return
+
+        if animation.phase == 1:
+            all_finished = True
+            for active_card in animation.cards:
+                finished = active_card.update(dt)
+                active_card.card.current_pos = active_card.current_pos
+                active_card.card.current_rotation = active_card.current_rotation
+                active_card.card.current_scale = active_card.current_scale
+                if not finished:
+                    all_finished = False
+
+            if not all_finished:
+                return
+
+            if self._queued_hand_transfer_payload is None:
+                return
+
+            snapshot = self._queued_hand_transfer_payload
+            previous_game = self._base_game
+            self._apply_network_snapshot(snapshot, previous_game)
+            self._queued_hand_transfer_payload = None
+            self._awaiting_hand_transfer_snapshot = False
+            self._hand_transfer_pre_signature = None
+            self.game.is_animating = True
+
+            screen_rect = screen.get_rect()
+            center = get_discard_pile_rect(screen_rect).center
+            center_point = (float(center[0]), float(center[1]))
+            owner_offsets: dict[int, int] = {}
+            for active_card in animation.cards:
+                new_owner = animation.target_owner_by_card_id.get(id(active_card.card), active_card.owner_id)
+                owner_offsets[new_owner] = owner_offsets.get(new_owner, 0) + 1
+                offset_index = owner_offsets[new_owner] - 1
+                stagger_x = float((offset_index % 5 - 2) * 12)
+                stagger_y = float((offset_index // 5) * 8)
+                target_anchor = get_player_anchor_point(screen_rect, new_owner, self.game.num_players)
+
+                active_card.owner_id = new_owner
+                active_card.current_pos = center_point
+                active_card.target_pos = (float(target_anchor[0] + stagger_x), float(target_anchor[1] + stagger_y))
+                active_card.current_rotation = 0.0
+                active_card.target_rotation = get_player_card_rotation(new_owner, self.game.num_players)
+                active_card.current_scale = 0.88
+                active_card.target_scale = 1.0
+
+            animation.phase = 2
+            self.next_ai_time = max(self.next_ai_time, now_ms + self.AI_TURN_DELAY_MS)
+            return
+
+        all_finished = True
+        for active_card in animation.cards:
+            finished = active_card.update(dt)
+            active_card.card.current_pos = active_card.current_pos
+            active_card.card.current_rotation = active_card.current_rotation
+            active_card.card.current_scale = active_card.current_scale
+            if not finished:
+                all_finished = False
+
+        if not all_finished:
+            return
+
+        self.hand_transfer_animation = None
+        self.visual_state = ""
+        self._hand_layout_initialized = False
+        self.game.is_animating = False
+        self._prune_hidden_hand_cards()
+        self.next_ai_time = max(self.next_ai_time, now_ms + self.AI_TURN_DELAY_MS)
+
+    def _update_direction_arrow(self, dt: float) -> None:
+        self.direction_arrow_speed = self.DIRECTION_ARROW_BASE_SPEED * self.game.turn_direction
+        self.direction_arrow_angle = (self.direction_arrow_angle + self.direction_arrow_speed * dt) % 360.0
 
     def _close_network(self) -> None:
         if self.client is not None:
