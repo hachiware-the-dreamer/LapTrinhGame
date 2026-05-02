@@ -273,6 +273,21 @@ class UnoRuleSettingsTest(unittest.TestCase):
         self.assertFalse(game.can_call_uno(1))
         self.assertFalse(game.call_uno(1).ok)
 
+    def test_call_uno_rejects_player_outside_current_turn(self) -> None:
+        game = self.make_game(GameSettings(num_players=2))
+        game.current_player = 0
+        game.player_hands = [
+            [number("yellow", 3)],
+            [number("red", 9), number("blue", 2)],
+        ]
+
+        self.assertTrue(game.can_call_uno(1))
+        result = game.call_uno(1)
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.message, "Not this player's turn.")
+        self.assertNotIn(1, game.uno_called_players)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -332,6 +332,9 @@ class UnoGameManager:
         if not (0 <= player_id < self.num_players):
             return ActionResult(False, "Invalid player.")
 
+        if player_id != self.current_player:
+            return ActionResult(False, "Not this player's turn.")
+
         hand_size = len(self.player_hands[player_id])
         if hand_size != 2:
             return ActionResult(False, "UNO can be called when you have exactly two cards.")

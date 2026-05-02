@@ -178,6 +178,38 @@ class HostAIPacingTest(unittest.TestCase):
         finally:
             host.close()
 
+    def test_human_uno_action_is_rejected_outside_current_turn(self) -> None:
+        host = self.make_host(capacity=2)
+        try:
+            ok, _, _ = host.start_match()
+            self.assertTrue(ok)
+            match = host._state.match
+            self.assertIsNotNone(match)
+            assert match is not None
+
+            match.game.current_player = 1
+            match.game.pending_effect = None
+            match.game.current_color = "red"
+            match.game.discard_pile = [Card(color="red", kind="number", number=3)]
+            match.game.player_hands[0] = [
+                Card(color="red", kind="number", number=5),
+                Card(color="blue", kind="number", number=8),
+            ]
+
+            result = match.validate_and_apply(
+                host.host_player_token,
+                {"action_type": "uno"},
+                now_ms=int(time.time() * 1000),
+            )
+
+            self.assertFalse(result.ok)
+            self.assertEqual(result.message, "Not this player's turn.")
+            self.assertEqual(result.events, [])
+            self.assertNotIn(0, match.game.uno_called_players)
+
+        finally:
+            host.close()
+
     def test_human_penalty_event_includes_uno_caught_player(self) -> None:
         host = self.make_host(capacity=2)
         try:

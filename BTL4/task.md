@@ -76,4 +76,5 @@
 ### Implementation Notes (Task 11)
 - Added `UnoGameManager.can_call_uno()` and made `call_uno()` enforce exactly two cards plus at least one legal play.
 - The UNO HUD button now uses the same rule helper, preventing UI and networking from disagreeing.
+- Host-side UNO calls now also require the caller to be the current player, matching the visible button behavior.
 - Added fading green/red screen flashes for successful UNO calls and missed-call penalties, including synchronized multiplayer events.
