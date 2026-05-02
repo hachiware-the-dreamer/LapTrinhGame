@@ -211,6 +211,9 @@ class HostAuthoritativeMatch:
             "chosen_direction": payload.get("chosen_direction"),
             "target_player_id": payload.get("target_player_id"),
             "chosen_color": payload.get("chosen_color"),
+            "uno_call_player": result.uno_call_player,
+            "uno_caught_player": result.uno_caught_player,
+            "uno_penalty_cards": [_serialize_card(card) for card in result.uno_penalty_cards],
         }
 
     def _auto_resolve_ai_pending(self, now_ms: int) -> list[dict[str, Any]]:

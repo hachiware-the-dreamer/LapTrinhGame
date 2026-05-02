@@ -146,6 +146,73 @@ class HostAIPacingTest(unittest.TestCase):
         finally:
             host.close()
 
+    def test_human_uno_event_includes_uno_call_player(self) -> None:
+        host = self.make_host(capacity=2)
+        try:
+            ok, _, _ = host.start_match()
+            self.assertTrue(ok)
+            match = host._state.match
+            self.assertIsNotNone(match)
+            assert match is not None
+
+            match.game.current_player = 0
+            match.game.pending_effect = None
+            match.game.current_color = "red"
+            match.game.discard_pile = [Card(color="red", kind="number", number=3)]
+            match.game.player_hands[0] = [
+                Card(color="red", kind="number", number=5),
+                Card(color="blue", kind="number", number=8),
+            ]
+
+            result = match.validate_and_apply(
+                host.host_player_token,
+                {"action_type": "uno"},
+                now_ms=int(time.time() * 1000),
+            )
+
+            self.assertTrue(result.ok)
+            self.assertEqual(len(result.events), 1)
+            self.assertEqual(result.events[0]["action"], "uno")
+            self.assertEqual(result.events[0]["uno_call_player"], 0)
+
+        finally:
+            host.close()
+
+    def test_human_penalty_event_includes_uno_caught_player(self) -> None:
+        host = self.make_host(capacity=2)
+        try:
+            ok, _, _ = host.start_match()
+            self.assertTrue(ok)
+            match = host._state.match
+            self.assertIsNotNone(match)
+            assert match is not None
+
+            match.game.current_player = 0
+            match.game.pending_effect = None
+            match.game.pending_draw_penalty_count = 0
+            match.game.pending_draw_penalty_kind = None
+            match.game.current_color = "red"
+            match.game.discard_pile = [Card(color="red", kind="number", number=3)]
+            match.game.player_hands[0] = [
+                Card(color="red", kind="number", number=5),
+                Card(color="blue", kind="number", number=8),
+            ]
+
+            result = match.validate_and_apply(
+                host.host_player_token,
+                {"action_type": "play", "card_index": 0},
+                now_ms=int(time.time() * 1000),
+            )
+
+            self.assertTrue(result.ok)
+            penalty_events = [event for event in result.events if event.get("actor_id") == 0]
+            self.assertEqual(len(penalty_events), 1)
+            self.assertEqual(penalty_events[0]["uno_caught_player"], 0)
+            self.assertEqual(len(penalty_events[0]["uno_penalty_cards"]), 2)
+
+        finally:
+            host.close()
+
 
 if __name__ == "__main__":
     unittest.main()

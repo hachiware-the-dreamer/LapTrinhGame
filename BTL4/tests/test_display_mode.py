@@ -3,7 +3,7 @@ import unittest
 import pygame
 
 from main import DEFAULT_SCREEN_SIZE, MIN_SCREEN_SIZE, DisplayModeState, fit_window_size_to_desktop
-from scripts.screens import AudioSettings, MainSettingsScreen
+from scripts.screens import AudioSettings, GameSettingsScreen, MainSettingsScreen
 
 
 class DisplayModeStateTest(unittest.TestCase):
@@ -86,6 +86,21 @@ class MainSettingsDisplayModeTest(unittest.TestCase):
         display_label_top = display_rects["windowed"].y - 54
 
         self.assertLessEqual(slider_rects["sfx"].bottom + 8, display_label_top)
+
+
+class GameSettingsLayoutTest(unittest.TestCase):
+    def test_two_player_reverse_row_does_not_overlap_bottom_buttons_at_minimum_size(self) -> None:
+        screen_rect = pygame.Rect((0, 0), MIN_SCREEN_SIZE)
+        behavior_rects = GameSettingsScreen._get_two_player_behavior_rects(
+            screen_rect,
+            show_rule_8_timer=True,
+        )
+        bottom_rects = GameSettingsScreen._get_bottom_button_rects(screen_rect)
+
+        lowest_behavior_bottom = max(rect.bottom for rect in behavior_rects.values())
+        highest_bottom_button_top = min(rect.top for rect in bottom_rects.values())
+
+        self.assertLessEqual(lowest_behavior_bottom + 8, highest_bottom_button_top)
 
 
 if __name__ == "__main__":

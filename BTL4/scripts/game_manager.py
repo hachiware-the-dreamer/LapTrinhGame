@@ -320,15 +320,23 @@ class UnoGameManager:
 
         return self._apply_uno_check(player_id, ActionResult(True, "Card played.", played_card=card))
 
+    def can_call_uno(self, player_id: int) -> bool:
+        if not (0 <= player_id < self.num_players):
+            return False
+        hand = self.player_hands[player_id]
+        if len(hand) != 2:
+            return False
+        return any(self.is_legal_play(card) for card in hand)
+
     def call_uno(self, player_id: int) -> ActionResult:
         if not (0 <= player_id < self.num_players):
             return ActionResult(False, "Invalid player.")
 
         hand_size = len(self.player_hands[player_id])
-        if hand_size == 0:
-            return ActionResult(False, "That player has no cards.")
-        if hand_size > 2:
-            return ActionResult(False, "UNO can be called when you have two cards.")
+        if hand_size != 2:
+            return ActionResult(False, "UNO can be called when you have exactly two cards.")
+        if not self.can_call_uno(player_id):
+            return ActionResult(False, "UNO can be called only when you have a legal play.")
 
         self.uno_called_players.add(player_id)
         return ActionResult(True, f"Player {player_id + 1} called UNO.", uno_call_player=player_id)

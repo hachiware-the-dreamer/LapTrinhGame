@@ -996,10 +996,12 @@ class GameSettingsScreen(BaseScreen):
 
     @staticmethod
     def _get_two_player_behavior_rects(screen_rect: pygame.Rect, show_rule_8_timer: bool) -> dict[str, pygame.Rect]:
-        start_y = int(screen_rect.height * (0.79 if show_rule_8_timer else 0.66))
         button_width = 180
         button_height = 60
         spacing = 30
+        preferred_y = int(screen_rect.height * (0.79 if show_rule_8_timer else 0.66))
+        bottom_button_top = min(rect.top for rect in GameSettingsScreen._get_bottom_button_rects(screen_rect).values())
+        start_y = min(preferred_y, bottom_button_top - button_height - 8)
         block_x = screen_rect.centerx - (button_width * 2 + spacing) // 2
         return {
             "skip": pygame.Rect(block_x, start_y, button_width, button_height),
@@ -1374,6 +1376,7 @@ class PlayingScreen(BaseScreen):
     DIRECTION_ARROW_DECEL = 2.5
     SHAKE_DURATION_MS = 260
     SHAKE_MAX_OFFSET = 10
+    UNO_FLASH_DURATION_MS = 950
     PAUSE_MENU_OPTIONS = ("resume", "return_title")
 
     def __init__(
@@ -1414,6 +1417,9 @@ class PlayingScreen(BaseScreen):
         self.pause_hovered_button: str | None = None
         self.screen_shake_remaining_ms = 0
         self.screen_shake_offset: tuple[int, int] = (0, 0)
+        self.uno_flash_text = ""
+        self.uno_flash_color: tuple[int, int, int] = (65, 175, 95)
+        self.uno_flash_remaining_ms = 0
         self._shadow_cache: dict[tuple[int, int, int], pygame.Surface] = {}
 
     @property
@@ -1469,6 +1475,7 @@ class PlayingScreen(BaseScreen):
         dt = 0.0 if self._last_update_ms is None else max(0.0, (now_ms - self._last_update_ms) / 1000.0)
         self._last_update_ms = now_ms
         self._update_screen_shake(dt)
+        self._update_uno_flash(dt)
 
         if self.game.winner is not None:
             return EndScreen(self.atlas, self.game, self.audio_settings)
@@ -1535,6 +1542,7 @@ class PlayingScreen(BaseScreen):
                 self.last_message = ai_turn.message
                 if ai_turn.result is not None and getattr(ai_turn.result, "uno_caught_player", None) is not None:
                     self._play_uno_catch_sound()
+                    self._trigger_uno_flash(False)
                 self._spawn_ai_animation(previous_player, ai_turn, screen, now_ms)
                 ai_delay = self.ai_rng.randint(1000, 1500)
                 self.next_ai_time = now_ms + ai_delay
@@ -1580,6 +1588,8 @@ class PlayingScreen(BaseScreen):
             )
             screen.blit(scaled, scaled_rect)
 
+        self._draw_uno_flash(screen)
+
         if self.pause_menu_open:
             self._draw_pause_menu(screen)
 
@@ -1604,6 +1614,35 @@ class PlayingScreen(BaseScreen):
             int(self.ai_rng.uniform(-intensity, intensity)),
             int(self.ai_rng.uniform(-intensity, intensity)),
         )
+
+    def _trigger_uno_flash(self, success: bool) -> None:
+        self.uno_flash_text = "tao tay` roi" if success else "chua tay` dau"
+        self.uno_flash_color = (65, 190, 100) if success else (230, 55, 55)
+        self.uno_flash_remaining_ms = self.UNO_FLASH_DURATION_MS
+
+    def _update_uno_flash(self, dt: float) -> None:
+        if self.uno_flash_remaining_ms <= 0:
+            self.uno_flash_remaining_ms = 0
+            return
+        self.uno_flash_remaining_ms = max(0, self.uno_flash_remaining_ms - int(dt * 1000.0))
+
+    def _draw_uno_flash(self, screen: pygame.Surface) -> None:
+        if self.uno_flash_remaining_ms <= 0 or not self.uno_flash_text:
+            return
+
+        progress = self.uno_flash_remaining_ms / self.UNO_FLASH_DURATION_MS
+        alpha = max(0, min(190, int(170 * progress)))
+        overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((*self.uno_flash_color, alpha))
+        screen.blit(overlay, (0, 0))
+
+        screen_rect = screen.get_rect()
+        font = theme_font(screen_rect.width, screen_rect.height, 64, bold=True)
+        text = font.render(self.uno_flash_text, True, (255, 255, 255))
+        shadow = font.render(self.uno_flash_text, True, (20, 24, 28))
+        center = screen_rect.center
+        screen.blit(shadow, shadow.get_rect(center=(center[0] + 4, center[1] + 5)))
+        screen.blit(text, text.get_rect(center=center))
 
     @staticmethod
     def _pause_button_rects(screen_rect: pygame.Rect) -> dict[str, pygame.Rect]:
@@ -1973,8 +2012,11 @@ class PlayingScreen(BaseScreen):
 
     def _record_player_action_result(self, result, now_ms: int) -> None:
         self.last_message = result.message
+        if result.ok and getattr(result, "uno_call_player", None) is not None:
+            self._trigger_uno_flash(True)
         if result.ok and getattr(result, "uno_caught_player", None) is not None:
             self._play_uno_catch_sound()
+            self._trigger_uno_flash(False)
         # Prevent same-frame AI actions from hiding turn transitions (e.g., after Reverse).
         if result.ok and self.game.winner is None and self.game.current_player != 0:
             self.next_ai_time = max(self.next_ai_time, now_ms + self.AI_TURN_DELAY_MS)
@@ -2893,6 +2935,12 @@ class MultiplayerPlayingScreen(PlayingScreen):
             self._base_game.num_players,
         )
         action = str(event.get("action", "")).strip().lower()
+        if event.get("uno_caught_player") is not None:
+            self._play_uno_catch_sound()
+            self._trigger_uno_flash(False)
+        elif action == "uno" and event.get("ok", True):
+            self._trigger_uno_flash(True)
+
         played_payload = event.get("played_card")
         drew_payload = event.get("drew_card")
         played_card = None
@@ -3110,6 +3158,7 @@ class MultiplayerPlayingScreen(PlayingScreen):
         dt = 0.0 if self._last_update_ms is None else max(0.0, (now_ms - self._last_update_ms) / 1000.0)
         self._last_update_ms = now_ms
         self._update_screen_shake(dt)
+        self._update_uno_flash(dt)
 
         if self.game.winner is not None:
             winner_name = self.seat_names.get(self.game.winner, f"Player {self.game.winner + 1}")

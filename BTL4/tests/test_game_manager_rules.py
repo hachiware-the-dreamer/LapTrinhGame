@@ -234,6 +234,45 @@ class UnoRuleSettingsTest(unittest.TestCase):
             [ACTION_WILD_DRAW_FOUR, "number", "number"],
         )
 
+    def test_can_call_uno_requires_two_cards_with_a_legal_play(self) -> None:
+        game = self.make_game(GameSettings(num_players=2))
+        game.player_hands = [
+            [number("red", 9), number("blue", 2)],
+            [number("yellow", 3)],
+        ]
+
+        self.assertTrue(game.can_call_uno(0))
+        result = game.call_uno(0)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.uno_call_player, 0)
+        self.assertIn(0, game.uno_called_players)
+
+    def test_can_call_uno_rejects_two_cards_without_a_legal_play(self) -> None:
+        game = self.make_game(GameSettings(num_players=2))
+        game.player_hands = [
+            [number("blue", 9), number("yellow", 2)],
+            [number("yellow", 3)],
+        ]
+
+        self.assertFalse(game.can_call_uno(0))
+        result = game.call_uno(0)
+
+        self.assertFalse(result.ok)
+        self.assertNotIn(0, game.uno_called_players)
+
+    def test_can_call_uno_rejects_one_or_more_than_two_cards(self) -> None:
+        game = self.make_game(GameSettings(num_players=2))
+        game.player_hands = [
+            [number("red", 9)],
+            [number("yellow", 3), number("red", 1), number("red", 2)],
+        ]
+
+        self.assertFalse(game.can_call_uno(0))
+        self.assertFalse(game.call_uno(0).ok)
+        self.assertFalse(game.can_call_uno(1))
+        self.assertFalse(game.call_uno(1).ok)
+
 
 if __name__ == "__main__":
     unittest.main()

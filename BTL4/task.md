@@ -57,18 +57,23 @@
 ## Task 11: Polish UNO Call Mechanics & Visual Effects
 *Note: The UNO button logic needs refinement to prevent false activations, and we need to add the specific Vietnamese text popups and screen flashes.*
 
-- [ ] **Smart UNO Button Activation:**
+- [x] **Smart UNO Button Activation:**
   - Update the local UI logic: The "UNO" button should *only* light up and become interactable if the local player's hand size is exactly 2 AND at least one of those 2 cards is a legal play (matches current color, number, action, or is a Wild).
   - Ensure the button remains dimmed/disabled if the player has 2 cards but no legal moves (meaning their only option is to draw).
-- [ ] **Success Visuals ("tao tay` roi"):**
+- [x] **Success Visuals ("tao tay` roi"):**
   - Create a visual event that triggers when a player successfully calls UNO.
   - Draw a screen-wide, semi-transparent green overlay (e.g., using `pygame.Surface` with alpha) that flashes and quickly fades out.
   - Render large, bold text in the exact center of the screen that says: **"tao tay` roi"**.
-- [ ] **Catch/Penalty Visuals ("chua tay` dau"):**
+- [x] **Catch/Penalty Visuals ("chua tay` dau"):**
   - Create a visual event that triggers when a player is caught failing to call UNO and receives the +2 penalty.
   - Draw a screen-wide, semi-transparent red flash overlay that quickly fades out.
   - Render large, bold text in the exact center of the screen that says: **"chua tay` dau"**.
-- [ ] **Multiplayer Sync for Visuals:**
+- [x] **Multiplayer Sync for Visuals:**
   - Hook these new visual effects into the multiplayer event listener (Task 9). 
   - When `client.poll_messages()` receives an `event["action"] == "uno"`, trigger the green flash. 
   - If you implement a "caught" event, trigger the red flash globally so everyone in the lobby sees the text and flash when someone gets penalized.
+
+### Implementation Notes (Task 11)
+- Added `UnoGameManager.can_call_uno()` and made `call_uno()` enforce exactly two cards plus at least one legal play.
+- The UNO HUD button now uses the same rule helper, preventing UI and networking from disagreeing.
+- Added fading green/red screen flashes for successful UNO calls and missed-call penalties, including synchronized multiplayer events.

@@ -1048,7 +1048,7 @@ def render_ui(
     )
 
     uno_rect = get_uno_button_rect(screen_rect)
-    uno_enabled = game.current_player == 0 and game.pending_effect is None and len(hand) <= 2 and len(hand) > 0
+    uno_enabled = game.current_player == 0 and game.pending_effect is None and game.can_call_uno(0)
     uno_armed = 0 in game.uno_called_players
     _draw_uno_button(screen, uno_rect, uno_enabled, uno_armed)
 
